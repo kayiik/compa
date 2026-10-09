@@ -3,7 +3,7 @@
 Notable changes to Compa, newest first. Versions follow
 [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## 0.0.1 - 2026-10-09
 
 First release.
 
