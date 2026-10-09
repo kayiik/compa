@@ -33,7 +33,7 @@ func (p *Pipeline) tryCandidateStreamingLLM(
 	if !p.candidateStreamingEligible(ts, exec) {
 		return nil, false, nil
 	}
-	streamer, ok := p.Bus.GetStreamer(ctx, ts.channel, ts.chatID, ts.sessionKey)
+	streamer, ok := p.streamerFor(ctx, ts)
 	if !ok || streamer == nil {
 		return nil, false, nil
 	}
@@ -125,11 +125,15 @@ func (p *Pipeline) candidateStreamingEligible(ts *turnState, exec *turnExecution
 	if strings.TrimSpace(ts.channel) == "" || strings.TrimSpace(ts.chatID) == "" {
 		return false
 	}
-	if !ts.opts.SendResponse && !ts.opts.AllowInterimWebPublish {
+	terminal := p.terminalStreaming(ts)
+	if !terminal && !ts.opts.SendResponse && !ts.opts.AllowInterimWebPublish {
 		return false
 	}
 	if exec.activeCallSpec == nil || !exec.activeCallSpec.Streaming {
 		return false
+	}
+	if terminal {
+		return true
 	}
 	channelStreaming, ok := p.channelStreamingConfig(ts.channel)
 	return ok && channelStreaming.Enabled
@@ -158,7 +162,7 @@ func (p *Pipeline) tryConfiguredStreamingLLM(
 		return nil, false, nil
 	}
 
-	streamer, ok := p.Bus.GetStreamer(ctx, ts.channel, ts.chatID, ts.sessionKey)
+	streamer, ok := p.streamerFor(ctx, ts)
 	if !ok || streamer == nil {
 		logger.DebugCF("agent", "configured streaming not used", map[string]any{
 			"agent_id": ts.agent.ID,
@@ -408,7 +412,8 @@ func (p *Pipeline) configuredStreamingEligible(ts *turnState, exec *turnExecutio
 		})
 		return false
 	}
-	if !ts.opts.SendResponse && !ts.opts.AllowInterimWebPublish {
+	terminal := p.terminalStreaming(ts)
+	if !terminal && !ts.opts.SendResponse && !ts.opts.AllowInterimWebPublish {
 		logger.DebugCF("agent", "configured streaming not used", map[string]any{
 			"agent_id": ts.agent.ID,
 			"channel":  ts.channel,
@@ -445,6 +450,9 @@ func (p *Pipeline) configuredStreamingEligible(ts *turnState, exec *turnExecutio
 			"reason":          "model_streaming_disabled",
 		})
 		return false
+	}
+	if terminal {
+		return true
 	}
 	channelStreaming, ok := p.channelStreamingConfig(ts.channel)
 	if !ok || !channelStreaming.Enabled {

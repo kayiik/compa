@@ -20,7 +20,7 @@ import (
 	"github.com/kayiik/compa/pkg/session"
 )
 
-func agentCmd(message, sessionKey, model, workspace string, debug bool) error {
+func agentCmd(message, sessionKey, model, workspace string, debug, events bool) error {
 	sessionKey = cliSessionKey(sessionKey)
 
 	cfg, err := internal.LoadConfig()
@@ -90,6 +90,9 @@ func agentCmd(message, sessionKey, model, workspace string, debug bool) error {
 
 	if message != "" {
 		ctx := context.Background()
+		if events {
+			return runWithEvents(ctx, agentLoop, message, sessionKey, os.Stdout)
+		}
 		response, err := agentLoop.ProcessDirect(ctx, message, sessionKey)
 		if err != nil {
 			return fmt.Errorf("error processing message: %w", err)
