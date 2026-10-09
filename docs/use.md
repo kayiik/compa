@@ -2,8 +2,8 @@
 
 Compa's web UI is at http://localhost:18800. The sidebar has **Chat**,
 **Models** and **Channels**; under **Agent**, **Skill hub**, **Skills**,
-**Modules** and **Tools**; under **Services**, **Config**, **Voice** and
-**Logs**.
+**Modules**, **Compitas** and **Tools**; under **Services**, **Config**,
+**Voice** and **Logs**.
 
 Settings written like `tools.approval` are keys in `~/.compa/config.json`,
 which **Config** → **Raw Config** edits.
@@ -241,6 +241,13 @@ target:
 ```
 
 For Teams, use `teams_webhook` and a Teams workflow webhook URL.
+
+## Compitas
+
+Compitas are agents that keep running beside Compa, each with its own workspace
+and chat, on this computer or on other machines you add. Give one a goal and it
+works on it until it is done. They are off until you turn them on under
+**Agent** → **Compitas**. See [Compitas](compitas.md).
 
 ## Skills and modules
 

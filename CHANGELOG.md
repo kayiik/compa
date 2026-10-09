@@ -14,6 +14,17 @@ First release.
   give the agent its own identity with the `AGENT.md` keys `name`,
   `description`, `memory` and `privateWorkspace`, and require tool calls with
   `requireTools: true`. See [Embed the Go runtime](docs/embedding.md).
+- Compitas: agents that keep working beside Compa, each with its own workspace
+  and chat, on this computer or on other machines you add, with an optional
+  browser you can watch and take over. Give one a goal and it works until it is
+  done or blocked; schedules and webhooks start work with nobody chatting, and
+  it asks you before risky actions. They are off until you turn them on under
+  **Agent** → **Compitas**. See [Compitas](docs/compitas.md).
+- `compa-kernel agent -m … --events` prints what the turn does as it happens,
+  as JSON lines: the answer as it is written, the tools used, then the whole
+  answer. See [agent](docs/cli.md#agent).
+- `compa-kernel compute` makes a machine serve Compitas for a Compa, and
+  `make compita-images` builds the Docker images for container isolation.
 - Chat apps: the web chat, WhatsApp and Slack, plus the Slack and Teams
   webhooks for notifications. Slack needs the app token (`xapp-`) as well as the
   bot token.
