@@ -61,6 +61,36 @@ func TestHostAllowlistAcceptsOnlyThisComputersNames(t *testing.T) {
 	}
 }
 
+func TestHostAllowlistLetsMachinesAndWebhooksUseTheirOwnName(t *testing.T) {
+	h := HostAllowlist(HostAllowlistConfig{
+		LocalAddrs: func() []net.IP { return []net.IP{net.ParseIP("192.168.1.20")} },
+	}, okHandler())
+	for _, tc := range []struct {
+		method, path string
+		want         int
+	}{
+		// They carry a credential of their own, and the name is whatever
+		// their network calls this computer: a Docker host name, a domain.
+		{http.MethodPost, "/api/compute/poll", http.StatusOK},
+		{http.MethodPost, "/api/compute/peer", http.StatusOK},
+		{http.MethodPost, "/api/compute/approval", http.StatusOK},
+		{http.MethodPost, "/api/compitas/ana/trigger", http.StatusOK},
+		// Everything a browser session can reach stays guarded.
+		{http.MethodGet, "/api/compute/poll", http.StatusMisdirectedRequest},
+		{http.MethodPost, "/api/compitas/ana/objective", http.StatusMisdirectedRequest},
+		{http.MethodPost, "/api/compute/approvals/x", http.StatusMisdirectedRequest},
+		{http.MethodPost, "/api/auth/login", http.StatusMisdirectedRequest},
+	} {
+		req := httptest.NewRequest(tc.method, tc.path, nil)
+		req.Host = "host.docker.internal:18911"
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != tc.want {
+			t.Errorf("%s %s from an unknown name = %d, want %d", tc.method, tc.path, rec.Code, tc.want)
+		}
+	}
+}
+
 func TestHostAllowlistRereadsAddressesForANewOne(t *testing.T) {
 	addrs := []net.IP{net.ParseIP("10.0.0.5")}
 	h := HostAllowlist(HostAllowlistConfig{LocalAddrs: func() []net.IP { return addrs }}, okHandler())
@@ -114,6 +144,10 @@ func TestSameOriginGuard(t *testing.T) {
 		{"reads pass", http.MethodGet, "/api/config", "http://evil.example", "cross-site", http.StatusOK},
 		{"websocket from a foreign page", http.MethodGet, "/web/ws", "http://evil.example", "", http.StatusForbidden},
 		{"websocket from the dashboard", http.MethodGet, "/web/ws", "http://127.0.0.1:18800", "", http.StatusOK},
+		{"live view from a foreign page", http.MethodGet, "/api/compitas/ana/live/ws", "http://evil.example", "", http.StatusForbidden},
+		{"live view from a foreign site, by metadata", http.MethodGet, "/api/compitas/ana/live/ws", "", "cross-site", http.StatusForbidden},
+		{"live view from the dashboard", http.MethodGet, "/api/compitas/ana/live/ws", "http://127.0.0.1:18800", "", http.StatusOK},
+		{"other Compita reads pass", http.MethodGet, "/api/compitas/ana/stream", "http://evil.example", "cross-site", http.StatusOK},
 		{"pages are not checked", http.MethodPost, "/launcher-login", "http://evil.example", "", http.StatusOK},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

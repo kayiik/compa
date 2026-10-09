@@ -21,6 +21,7 @@ import (
 	"github.com/kayiik/compa/cmd/compa-kernel/internal/agent"
 	"github.com/kayiik/compa/cmd/compa-kernel/internal/auth"
 	"github.com/kayiik/compa/cmd/compa-kernel/internal/cliui"
+	"github.com/kayiik/compa/cmd/compa-kernel/internal/computecmd"
 	configcmd "github.com/kayiik/compa/cmd/compa-kernel/internal/config"
 	"github.com/kayiik/compa/cmd/compa-kernel/internal/cron"
 	evolutioncmd "github.com/kayiik/compa/cmd/compa-kernel/internal/evolution"
@@ -141,6 +142,7 @@ compa-kernel gateway`,
 		gateway.NewGatewayCommand(),
 		status.NewStatusCommand(),
 		cron.NewCronCommand(),
+		computecmd.NewComputeCommand(),
 		evolutioncmd.NewEvolutionCommand(),
 		mcp.NewMCPCommand(),
 		skills.NewSkillsCommand(),

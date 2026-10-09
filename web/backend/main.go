@@ -712,6 +712,8 @@ func main() {
 		logger.ErrorC("web", fmt.Sprintf("Warning: failed to ensure web channel on startup: %v", err))
 	}
 	apiHandler.SetServerOptions(portNum, effectivePublic, explicitPublic, launcherCfg.AllowedCIDRs)
+	apiHandler.ResumeObjectives()
+	apiHandler.StartScheduler()
 	apiHandler.SetServerAccessOptions(
 		launcherCfg.AllowLocalhostBypass,
 		launcherCfg.TrustedProxyCIDRs,

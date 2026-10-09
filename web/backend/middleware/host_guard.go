@@ -35,7 +35,10 @@ type HostAllowlistConfig struct {
 func HostAllowlist(cfg HostAllowlistConfig, next http.Handler) http.Handler {
 	allow := newHostAllowlist(cfg)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if allow.allows(r.Host) {
+		// Machines and webhooks reach the dashboard by whatever name they
+		// have for it, and carry a credential of their own: DNS rebinding,
+		// which this guards against, gets a page no such credential.
+		if allow.allows(r.Host) || isMachineEndpoint(r.Method, r.URL.Path) {
 			next.ServeHTTP(w, r)
 			return
 		}

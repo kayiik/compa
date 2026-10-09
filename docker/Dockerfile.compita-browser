@@ -1,0 +1,22 @@
+ARG KERNEL_IMAGE=compa-compita:local
+FROM ${KERNEL_IMAGE} AS kernel
+
+FROM mcr.microsoft.com/playwright/mcp:v0.0.82
+USER root
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends novnc websockify x11vnc \
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -sf /app/cli.js /usr/local/bin/playwright-mcp \
+    && mkdir -p /data \
+    && chmod 0777 /data
+COPY --from=kernel /usr/local/bin/compa-kernel /usr/local/bin/compa-kernel
+COPY docker/browser-entrypoint.sh /usr/local/bin/browser-entrypoint.sh
+RUN chmod 0755 /usr/local/bin/browser-entrypoint.sh /usr/local/bin/compa-kernel
+ENV COMPA_HOME=/data \
+    HOME=/data/browser-home \
+    DISPLAY=:99 \
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
+    PLAYWRIGHT_SKIP_BROWSER_GC=1 \
+    COMPA_BROWSER_NO_SANDBOX=1
+VOLUME /data
+ENTRYPOINT ["/usr/local/bin/browser-entrypoint.sh", "compa-kernel"]

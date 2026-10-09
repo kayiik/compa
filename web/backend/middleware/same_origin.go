@@ -7,8 +7,9 @@ import (
 	"strings"
 )
 
-// SameOriginGuard refuses API writes (POST, PUT, PATCH, DELETE) and the web
-// chat WebSocket handshake when a browser sent them from another origin. The
+// SameOriginGuard refuses API writes (POST, PUT, PATCH, DELETE), the web chat
+// WebSocket handshake and the live view of a Compita's browser (which also
+// drives it) when a browser sent them from another origin. The
 // session cookie is SameSite=Lax, which browsers also send from any other
 // localhost port, so the cookie alone does not show that the dashboard asked.
 // A request with neither Origin nor Sec-Fetch-Site comes from no browser, such
@@ -41,7 +42,14 @@ func originChecked(r *http.Request) bool {
 	case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
 		return true
 	}
-	return false
+	return r.Method == http.MethodGet && isCompitaLivePath(p)
+}
+
+// isCompitaLivePath reports whether p is the live view WebSocket of a Compita:
+// /api/compitas/<id>/live/ws.
+func isCompitaLivePath(p string) bool {
+	parts := strings.Split(p, "/")
+	return len(parts) == 6 && parts[2] == "compitas" && parts[3] != "" && parts[4] == "live" && parts[5] == "ws"
 }
 
 // SameOriginRequest reports whether r may act: a browser request must come

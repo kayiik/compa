@@ -1,4 +1,4 @@
-.PHONY: all build kernel shell product build-linux-arm build-linux-arm64 \
+.PHONY: all build kernel shell product compita-images build-linux-arm build-linux-arm64 \
 	build-linux-mipsle build-android-arm64 build-shell-android-arm64 build-android-bundle build-pi-zero \
 	build-all install uninstall uninstall-all clean vet test fmt fmt-check lint lint-docs fix deps \
 	update-deps check run build-macos-app help
@@ -252,6 +252,11 @@ product: kernel shell
 	@echo "Full product $(VERSION) in $(BUILD_DIR)/:"
 	@echo "  $(SHELL_NAME)$(EXT)   <- the user launches this"
 	@echo "  $(KERNEL_NAME)$(EXT)  <- it supervises this"
+
+## compita-images: Build the Docker images that Compitas with container isolation run in
+compita-images:
+	docker build -f docker/Dockerfile.compita -t compa-compita:local .
+	docker build -f docker/Dockerfile.compita-browser -t compa-compita-browser:local .
 
 ## build: Build compa-kernel for the current platform (platform-suffixed, plus a plain copy)
 build:
