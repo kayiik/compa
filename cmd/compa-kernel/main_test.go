@@ -39,6 +39,7 @@ func TestNewRootCommand(t *testing.T) {
 	allowedCommands := []string{
 		"agent",
 		"auth",
+		"compute",
 		"config",
 		"cron",
 		"evolution",

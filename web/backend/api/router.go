@@ -105,6 +105,9 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	// Gateway process lifecycle
 	h.registerGatewayRoutes(mux)
 
+	// Compitas: computes, enrollment and peer agents
+	h.registerComputeRoutes(mux)
+
 	// Session history
 	h.registerSessionRoutes(mux)
 
@@ -152,5 +155,6 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 
 // Shutdown gracefully shuts down the handler, stopping the gateway if it was started by this handler.
 func (h *Handler) Shutdown() {
+	stopObjectiveRuns()
 	h.StopGateway()
 }

@@ -49,6 +49,7 @@ Every command has `--help`; `--no-color` turns colors off. `compa-kernel help
 | `agent` | Interact with the agent directly. |
 | `auth` | Manage authentication (login, logout, status). |
 | `completion` | Generate the autocompletion script for the specified shell. |
+| `compute` | Use this machine as compute for Compitas. |
 | `config` | Manage configuration. |
 | `cron` | Manage scheduled tasks. |
 | `evolution` | Review the skill drafts evolution proposes. |
@@ -88,12 +89,33 @@ when asked; other providers are connected on the Models page.
 | `--model <selection>` | Model for this run: an exact target `instance-id/model-id` or a model route name. |
 | `-s`, `--session <key>` | Session key (default `cli:default`). |
 | `-w`, `--workspace <dir>`, `-C`, `--dir <dir>` | Working directory / workspace. |
+| `--events` | With `-m`, print what the turn does as it happens, as JSON lines (see below). |
 | `-d`, `--debug` | Debug logging. |
 
 Interactive `compa-kernel agent` asks you for [approvals](use.md#approvals) in
 the terminal; its calls have the origin `cli`. With `-m` the terminal can't
 ask, so a call the policy asks about is refused unless an approver hook
 decides it.
+
+With `--events`, stdout is one JSON object per line, as the turn goes on: the
+answer being written as `{"type":"delta","text":"…"}` (`segment` starts a new
+model call and `reset` says the provider revised the text so far), each tool
+call as `{"type":"tool","tool":"exec","state":"start","detail":"…"}` and again
+with `state` `end` or `error`, and last either `{"type":"final","text":"…"}`
+with the whole answer or `{"type":"error","text":"…"}`. The deltas arrive only
+when the model's provider streams; the `final` line always carries the answer.
+[Compitas](compitas.md#chat) use it to show a turn live.
+
+### compute
+
+| Command | What it does |
+|---|---|
+| `compute enroll --url <address> --token <token>` | Enroll this machine with the Compa that issued the token. |
+| `compute serve` | Run Compitas for the Compa this machine enrolled with: poll it for work and send the results back. |
+| `compute serve --listen <address> --secret <secret>` | Serve Compa's requests on an address instead, for a Compa that connects in. `--tls` serves HTTPS with a self-signed certificate and prints its fingerprint. |
+
+`compute serve --image <image>` names the Docker image for container
+isolation, by default `compa-compita:local`. See [Compitas](compitas.md#computes).
 
 ### model
 
@@ -243,6 +265,8 @@ keeps its task and pattern records for 30 days.
 | `COMPA_DNS_SERVER` | On Linux without `/etc/resolv.conf`, the DNS servers `compa-kernel` asks, separated by `;` (default `8.8.8.8:53;1.1.1.1:53`). |
 | `COMPA_CHANNELS_<NAME>_ENABLED` | Turns the `channel_list` entry `<NAME>` on (`true`) or off (`false`) instead of its `enabled`, such as `COMPA_CHANNELS_WEB_ENABLED=true` for the web chat. `<NAME>` is the entry's name in capitals, with `_` for each character other than a letter or digit. |
 | `COMPA_CHANNELS_WEB_STREAMING_ENABLED` | Turns streamed replies on or off in the web chat. The same prefix with `_STREAMING_THROTTLE_SECONDS` and `_STREAMING_MIN_GROWTH_CHARS` sets its `throttle_seconds` and `min_growth_chars`. |
+| `COMPA_LIVE_ADDR` | For a Compita's [browser](compitas.md#browser) on the machine itself rather than in a container: where the browser's screen listens (default `127.0.0.1:6080`, as in the browser image). |
+| `COMPA_BROWSER_NO_SANDBOX` | `1` starts a Compita's browser on the machine without Chromium's sandbox, for a machine that is itself a sandbox, such as the browser image. |
 
 Many `config.json` settings can be set with a variable named after their place
 in the file, such as `COMPA_AGENTS_DEFAULTS_WORKSPACE` for

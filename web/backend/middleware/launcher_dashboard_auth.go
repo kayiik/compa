@@ -350,7 +350,7 @@ func canonicalAuthPath(raw string) string {
 }
 
 func isPublicLauncherDashboardPath(method, p string) bool {
-	if isPublicLauncherDashboardStatic(method, p) {
+	if isPublicLauncherDashboardStatic(method, p) || isMachineEndpoint(method, p) {
 		return true
 	}
 	switch p {
@@ -364,6 +364,34 @@ func isPublicLauncherDashboardPath(method, p string) bool {
 		return method == http.MethodPost
 	}
 	return false
+}
+
+// isMachineEndpoint reports whether a request is one a machine or an outside
+// service makes with a credential of its own rather than a dashboard session:
+// a compute enrolling or polling, a Compita asking a colleague or its owner,
+// or an event posted to a Compita's trigger (a GitHub webhook). Each handler
+// checks that credential itself.
+func isMachineEndpoint(method, p string) bool {
+	if method == http.MethodGet {
+		// A new machine fetches its install script and the kernel with its
+		// one-time token.
+		if p == "/api/compute/install.sh" || p == "/api/compute/kernel" {
+			return true
+		}
+		// A dial-out compute connects back for the live view of a Compita's
+		// browser, with its credential, for a session Compa asked for.
+		parts := strings.Split(p, "/")
+		return len(parts) == 5 && parts[1] == "api" && parts[2] == "compute" && parts[3] == "live" && parts[4] != ""
+	}
+	if method != http.MethodPost {
+		return false
+	}
+	switch p {
+	case "/api/compute/enroll", "/api/compute/poll", "/api/compute/result", "/api/compute/events", "/api/compute/peer", "/api/compute/approval":
+		return true
+	}
+	parts := strings.Split(p, "/")
+	return len(parts) == 5 && parts[1] == "api" && parts[2] == "compitas" && parts[3] != "" && parts[4] == "trigger"
 }
 
 // isPublicLauncherDashboardStatic allows the SPA login route and embedded

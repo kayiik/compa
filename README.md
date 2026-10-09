@@ -45,6 +45,9 @@ Compa runs on Windows 10 or later, macOS 12 or later and Linux. More in
 - **Voice:** dictation and spoken replies, push-to-talk or hands-free.
 - **Chat apps:** WhatsApp, as a linked device of your account, and a Slack bot.
   Compa answers only you. Slack and Teams webhooks receive its notifications.
+- **Compitas:** agents that keep working beside Compa, each with its own
+  workspace and chat, on this computer or on other machines you add. Off until
+  you turn them on.
 - **Skills and modules:** instructions for particular tasks, and programs that
   add capabilities.
 - **Private by default:** settings, chats and keys stay in `~/.compa`; messages
@@ -59,6 +62,8 @@ Compa runs on Windows 10 or later, macOS 12 or later and Linux. More in
   access, building from source.
 - [Use Compa](docs/use.md): models, chat, tools, approvals, voice, chat apps,
   skills, modules.
+- [Compitas](docs/compitas.md): agents that work beside Compa, on this computer
+  or on other machines.
 - [Troubleshooting, privacy and security](docs/troubleshooting.md)
 - [Command line](docs/cli.md)
 - [Gateway interface](docs/gateway.md), for programs that run the gateway.

@@ -11,6 +11,7 @@ func NewAgentCommand() *cobra.Command {
 		model      string
 		dir        string
 		debug      bool
+		events     bool
 	)
 
 	cmd := &cobra.Command{
@@ -18,11 +19,13 @@ func NewAgentCommand() *cobra.Command {
 		Short: "Interact with the agent directly",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return agentCmd(message, sessionKey, model, dir, debug)
+			return agentCmd(message, sessionKey, model, dir, debug, events)
 		},
 	}
 
 	cmd.Flags().BoolVarP(&debug, "debug", "d", false, "Enable debug logging")
+	cmd.Flags().BoolVar(&events, "events", false,
+		"With --message, print what happens as JSON lines (answer text as it is written, tools used, then the whole answer)")
 	cmd.Flags().StringVarP(&message, "message", "m", "", "Send a single message (non-interactive mode)")
 	cmd.Flags().StringVarP(&sessionKey, "session", "s", "cli:default", "Session key")
 	cmd.Flags().StringVarP(&model, "model", "", "",

@@ -1,0 +1,17 @@
+# The image Compitas with container isolation run in: compa-kernel on a Debian
+# system, for the Compita to work with.
+#   make compita-images
+#   docker build -f docker/Dockerfile.compita -t compa-compita:local .
+FROM golang:1.26 AS build
+# go.mod can ask for a newer Go release than this image has.
+ENV GOTOOLCHAIN=auto
+WORKDIR /src
+COPY . .
+RUN CGO_ENABLED=0 go build -trimpath -tags goolm,stdjson -ldflags "-s -w" -o /out/compa-kernel ./cmd/compa-kernel
+
+FROM debian:stable-slim
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
+COPY --from=build /out/compa-kernel /usr/local/bin/compa-kernel
+ENV COMPA_HOME=/data
+VOLUME /data
+ENTRYPOINT ["compa-kernel"]

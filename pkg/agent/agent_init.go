@@ -373,6 +373,11 @@ func registerSharedTools(
 			agent.Tools.Register(delegateTool)
 		}
 
+		// Inside a Compita turn, peers are reachable through the Compa host.
+		if peerTool := tools.NewMessagePeerToolFromEnv(); peerTool != nil {
+			agent.Tools.Register(peerTool)
+		}
+
 		warnOnUnknownAgentToolDeclarations(agentID, agent.Workspace, agent.Definition, agent.Tools)
 	}
 }

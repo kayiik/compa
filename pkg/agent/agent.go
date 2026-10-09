@@ -54,6 +54,8 @@ type AgentLoop struct {
 	runtimeEventLogSub runtimeevents.Subscription
 	hooks              *HookManager
 
+	// terminalEvents, when set, makes the terminal's turns stream to it.
+	terminalEvents atomic.Pointer[terminalEvents]
 	// Runtime state
 	running        atomic.Bool
 	contextManager ContextManager
