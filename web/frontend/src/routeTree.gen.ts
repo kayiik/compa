@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AgentRouteImport } from './routes/agent'
+import { Route as CompitasRouteImport } from './routes/compitas'
 import { Route as ConfigRouteImport } from './routes/config'
 import { Route as LauncherLoginRouteImport } from './routes/launcher-login'
 import { Route as LauncherSetupRouteImport } from './routes/launcher-setup'
@@ -33,6 +34,11 @@ const IndexRoute = IndexRouteImport.update({
 const AgentRoute = AgentRouteImport.update({
   id: '/agent',
   path: '/agent',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CompitasRoute = CompitasRouteImport.update({
+  id: '/compitas',
+  path: '/compitas',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ConfigRoute = ConfigRouteImport.update({
@@ -104,6 +110,7 @@ const ConfigVoiceRoute = ConfigVoiceRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/agent': typeof AgentRouteWithChildren
+  '/compitas': typeof CompitasRoute
   '/config': typeof ConfigRouteWithChildren
   '/launcher-login': typeof LauncherLoginRoute
   '/launcher-setup': typeof LauncherSetupRoute
@@ -121,6 +128,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/agent': typeof AgentRouteWithChildren
+  '/compitas': typeof CompitasRoute
   '/config': typeof ConfigRouteWithChildren
   '/launcher-login': typeof LauncherLoginRoute
   '/launcher-setup': typeof LauncherSetupRoute
@@ -139,6 +147,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/agent': typeof AgentRouteWithChildren
+  '/compitas': typeof CompitasRoute
   '/config': typeof ConfigRouteWithChildren
   '/launcher-login': typeof LauncherLoginRoute
   '/launcher-setup': typeof LauncherSetupRoute
@@ -158,6 +167,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/agent'
+    | '/compitas'
     | '/config'
     | '/launcher-login'
     | '/launcher-setup'
@@ -175,6 +185,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/agent'
+    | '/compitas'
     | '/config'
     | '/launcher-login'
     | '/launcher-setup'
@@ -192,6 +203,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/agent'
+    | '/compitas'
     | '/config'
     | '/launcher-login'
     | '/launcher-setup'
@@ -210,6 +222,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AgentRoute: typeof AgentRouteWithChildren
+  CompitasRoute: typeof CompitasRoute
   ConfigRoute: typeof ConfigRouteWithChildren
   LauncherLoginRoute: typeof LauncherLoginRoute
   LauncherSetupRoute: typeof LauncherSetupRoute
@@ -233,6 +246,13 @@ declare module '@tanstack/react-router' {
       path: '/agent'
       fullPath: '/agent'
       preLoaderRoute: typeof AgentRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/compitas': {
+      id: '/compitas'
+      path: '/compitas'
+      fullPath: '/compitas'
+      preLoaderRoute: typeof CompitasRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/config': {
@@ -361,6 +381,7 @@ const ConfigRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AgentRoute: AgentRouteWithChildren,
+  CompitasRoute: CompitasRoute,
   ConfigRoute: ConfigRouteWithChildren,
   LauncherLoginRoute: LauncherLoginRoute,
   LauncherSetupRoute: LauncherSetupRoute,

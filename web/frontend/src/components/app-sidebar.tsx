@@ -10,6 +10,7 @@ import {
   IconSettings,
   IconSparkles,
   IconTools,
+  IconUsersGroup,
 } from "@tabler/icons-react"
 import { Link, useRouterState } from "@tanstack/react-router"
 import * as React from "react"
@@ -65,6 +66,7 @@ const NAV_GROUPS: NavGroup[] = [
       { title: "navigation.hub", url: "/agent/hub", icon: IconSearch },
       { title: "navigation.skills", url: "/agent/skills", icon: IconSparkles },
       { title: "navigation.modules", url: "/agent/modules", icon: IconPlug },
+      { title: "navigation.compitas", url: "/compitas", icon: IconUsersGroup },
       { title: "navigation.tools", url: "/agent/tools", icon: IconTools },
     ],
   },

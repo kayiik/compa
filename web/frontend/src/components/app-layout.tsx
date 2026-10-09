@@ -3,6 +3,7 @@ import { Toaster } from "sonner"
 
 import { AppHeader } from "@/components/app-header"
 import { AppSidebar } from "@/components/app-sidebar"
+import { CompitaDock } from "@/components/compitas/compita-dock"
 import { TourGuide } from "@/components/tour/tour-guide"
 import { SidebarProvider } from "@/components/ui/sidebar"
 import { TooltipProvider } from "@/components/ui/tooltip"
@@ -22,6 +23,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
           </div>
         </div>
         <Toaster position="bottom-center" />
+        <CompitaDock />
         <TourGuide />
       </SidebarProvider>
     </TooltipProvider>
