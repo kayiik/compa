@@ -31,8 +31,8 @@ const reply = (value: unknown, status = 200) =>
   Promise.resolve(new Response(JSON.stringify(value), { status }))
 
 const ANA = {
-  sender_id: "telegram:123",
-  platform_id: "123",
+  sender_id: "slack:U123ABC",
+  platform_id: "U123ABC",
   display_name: "Ana",
   first_seen: "2026-10-01T10:00:00Z",
   last_seen: "2026-10-01T10:05:00Z",
@@ -45,7 +45,7 @@ describe("channel access", () => {
   it("shows Allow From of a chat channel even while empty", () => {
     const { unmount } = render(
       <GenericForm
-        config={{ enabled: true, server: "irc.example.test" }}
+        config={{ enabled: true, token: "" }}
         onChange={() => {}}
         accessPolicy
       />,
@@ -66,7 +66,7 @@ describe("channel access", () => {
     expect(hasOwnerAccount({ allow_from: [] })).toBe(false)
     expect(hasOwnerAccount({ allow_from: ["*", " * ", " "] })).toBe(false)
     expect(hasOwnerAccount({ allow_from: [" @ana "] })).toBe(true)
-    expect(hasOwnerAccount({ allow_from: ["*", "telegram:123"] })).toBe(true)
+    expect(hasOwnerAccount({ allow_from: ["*", "slack:U123ABC"] })).toBe(true)
   })
 })
 
@@ -95,7 +95,7 @@ describe("ChannelPairingRequests", () => {
   it("shows nothing while no sender waits", async () => {
     stubPairing([])
     const { container } = render(
-      <ChannelPairingRequests channelName="telegram" onApproved={() => {}} />,
+      <ChannelPairingRequests channelName="slack" onApproved={() => {}} />,
     )
     await waitFor(() => expect(fetch).toHaveBeenCalled())
     expect(container).toBeEmptyDOMElement()
@@ -105,17 +105,19 @@ describe("ChannelPairingRequests", () => {
     const decisions = stubPairing([ANA])
     const onApproved = vi.fn()
     render(
-      <ChannelPairingRequests channelName="telegram" onApproved={onApproved} />,
+      <ChannelPairingRequests channelName="slack" onApproved={onApproved} />,
     )
     const row = (await screen.findByText("Ana")).closest("li")!
-    expect(within(row).getByText("telegram:123")).toBeInTheDocument()
+    expect(within(row).getByText("slack:U123ABC")).toBeInTheDocument()
 
     fireEvent.click(within(row).getByRole("button", { name: "Approve" }))
-    await waitFor(() => expect(onApproved).toHaveBeenCalledWith("telegram:123"))
+    await waitFor(() =>
+      expect(onApproved).toHaveBeenCalledWith("slack:U123ABC"),
+    )
     expect(decisions).toEqual([
       {
-        path: "/api/channels/telegram/pairing/approve",
-        body: { sender_id: "telegram:123" },
+        path: "/api/channels/slack/pairing/approve",
+        body: { sender_id: "slack:U123ABC" },
       },
     ])
     await waitFor(() =>
@@ -127,18 +129,18 @@ describe("ChannelPairingRequests", () => {
     const decisions = stubPairing([ANA])
     const onApproved = vi.fn()
     render(
-      <ChannelPairingRequests channelName="discord" onApproved={onApproved} />,
+      <ChannelPairingRequests channelName="slack" onApproved={onApproved} />,
     )
     fireEvent.click(await screen.findByRole("button", { name: "Deny" }))
     await waitFor(() =>
-      expect(decisions[0]?.path).toBe("/api/channels/discord/pairing/deny"),
+      expect(decisions[0]?.path).toBe("/api/channels/slack/pairing/deny"),
     )
     expect(onApproved).not.toHaveBeenCalled()
   })
 })
 
 describe("pairing on the channel page", () => {
-  // Serves the Telegram channel with allowFrom saved, and its pairing
+  // Serves the Slack channel with allowFrom saved, and its pairing
   // requests; returns the paths fetched.
   function stubChannel(allowFrom: string[], initial: unknown[]) {
     let requests = initial
@@ -151,17 +153,17 @@ describe("pairing on the channel page", () => {
         switch (path) {
           case "/api/channels/catalog":
             return reply({
-              channels: [{ name: "telegram", config_key: "telegram" }],
+              channels: [{ name: "slack", config_key: "slack" }],
             })
-          case "/api/channels/telegram/config":
+          case "/api/channels/slack/config":
             return reply({
               config: { enabled: true, allow_from: allowFrom },
-              configured_secrets: ["token"],
-              config_key: "telegram",
+              configured_secrets: ["bot_token", "app_token"],
+              config_key: "slack",
             })
-          case "/api/channels/telegram/pairing":
+          case "/api/channels/slack/pairing":
             return reply({ requests })
-          case "/api/channels/telegram/pairing/approve": {
+          case "/api/channels/slack/pairing/approve": {
             const body = JSON.parse(String(init?.body)) as {
               sender_id: string
             }
@@ -181,7 +183,7 @@ describe("pairing on the channel page", () => {
   it("lists pairing requests while Allow From lists no account", async () => {
     // "*" admits no one, so it is no account.
     stubChannel(["*"], [ANA])
-    render(<ChannelConfigPage channelName="telegram" />)
+    render(<ChannelConfigPage channelName="slack" />)
 
     const row = (await screen.findByText("Ana")).closest("li")!
     expect(screen.getByText("Pairing Requests")).toBeInTheDocument()
@@ -190,18 +192,18 @@ describe("pairing on the channel page", () => {
     // The approved sender is the owner's account in Allow From, saved by
     // the approval, so the requests hide and nothing is left to save.
     expect(
-      await screen.findByRole("button", { name: "Remove telegram:123" }),
+      await screen.findByRole("button", { name: "Remove slack:U123ABC" }),
     ).toBeInTheDocument()
     expect(screen.queryByText("Pairing Requests")).not.toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Save" })).toBeDisabled()
   })
 
   it("lists no pairing requests once Allow From lists an account", async () => {
-    const paths = stubChannel(["telegram:123"], [ANA])
-    render(<ChannelConfigPage channelName="telegram" />)
+    const paths = stubChannel(["slack:U123ABC"], [ANA])
+    render(<ChannelConfigPage channelName="slack" />)
 
     const remove = await screen.findByRole("button", {
-      name: "Remove telegram:123",
+      name: "Remove slack:U123ABC",
     })
     expect(screen.queryByText("Pairing Requests")).not.toBeInTheDocument()
 
@@ -209,6 +211,6 @@ describe("pairing on the channel page", () => {
     // the gateway answers the account and records no requests.
     fireEvent.click(remove)
     expect(screen.getByRole("button", { name: "Save" })).toBeEnabled()
-    expect(paths).not.toContain("/api/channels/telegram/pairing")
+    expect(paths).not.toContain("/api/channels/slack/pairing")
   })
 })

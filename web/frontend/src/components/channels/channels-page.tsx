@@ -11,11 +11,8 @@ import { cn } from "@/lib/utils"
  * of them, so they live on one page instead of crowding the navigation.
  */
 export function ChannelsPage() {
-  const { i18n, t } = useTranslation()
-  const { channels, loading, error } = useChannelList({
-    language: (i18n.resolvedLanguage ?? i18n.language ?? "").toLowerCase(),
-    t,
-  })
+  const { t } = useTranslation()
+  const { channels, loading, error } = useChannelList({ t })
 
   return (
     <div className="flex h-full flex-col">

@@ -164,7 +164,7 @@ func installAPIFakeModule(t *testing.T, home string) {
 	if runtime.GOOS == "windows" {
 		name += ".exe"
 	}
-	command := exec.Command("go", "build", "-tags", "goolm,stdjson", "-o", filepath.Join(dir, name), "../../../cmd/fakemodule")
+	command := exec.Command("go", "build", "-o", filepath.Join(dir, name), "../../../cmd/fakemodule")
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("build fake module: %v: %s", err, output)
 	}

@@ -563,16 +563,12 @@ let stockDaemon
 let failed = false
 try {
   await run("pnpm", ["run", "build:backend"], { cwd: frontendDir })
-  await run(
-    "go",
-    ["build", "-tags", "goolm,stdjson", "-o", kernelPath, "./cmd/compa-kernel"],
-    { cwd: repoRoot },
-  )
-  await run(
-    "go",
-    ["build", "-tags", "goolm,stdjson", "-o", launcherPath, "./web/backend"],
-    { cwd: repoRoot },
-  )
+  await run("go", ["build", "-o", kernelPath, "./cmd/compa-kernel"], {
+    cwd: repoRoot,
+  })
+  await run("go", ["build", "-o", launcherPath, "./web/backend"], {
+    cwd: repoRoot,
+  })
 
   // The extension daemon, when a kit describes one: the stock binary, and
   // the kit's UAT entrypoint, which registers the same providers with

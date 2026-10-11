@@ -35,10 +35,10 @@ func TestNewAuthCommand(t *testing.T) {
 	}
 
 	subcommands := cmd.Commands()
-	assert.Len(t, subcommands, len(allowedCommands)+len(pausedChannelCommands))
+	assert.Len(t, subcommands, len(allowedCommands))
 
 	for _, subcmd := range subcommands {
-		found := slices.Contains(allowedCommands, subcmd.Name()) || subcmd.Name() == "weixin" || subcmd.Name() == "wecom"
+		found := slices.Contains(allowedCommands, subcmd.Name())
 		assert.True(t, found, "unexpected subcommand %q", subcmd.Name())
 
 		assert.Len(t, subcmd.Aliases, 0)

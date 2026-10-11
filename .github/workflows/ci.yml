@@ -64,7 +64,7 @@ jobs:
           pnpm run build:backend
 
       - name: Build
-        run: go build -tags goolm,stdjson ./...
+        run: go build ./...
 
       # A release's THIRD_PARTY_NOTICES for Linux, so that a dependency
       # without a license file fails here rather than when releasing.
@@ -72,15 +72,15 @@ jobs:
         run: |
           out="$RUNNER_TEMP/notices"
           mkdir -p "$out"
-          go build -tags goolm,stdjson -o "$out/compa-kernel" ./cmd/compa-kernel
-          go build -tags goolm,stdjson -o "$out/compa" ./web/backend
+          go build -o "$out/compa-kernel" ./cmd/compa-kernel
+          go build -o "$out/compa" ./web/backend
           sh scripts/notices.sh "$out"
 
       - name: Vet
-        run: go vet -tags goolm,stdjson ./...
+        run: go vet ./...
 
       - name: Test
-        run: go test -tags goolm,stdjson -p 1 ./...
+        run: go test -p 1 ./...
 
 
   # Releases ship Windows and macOS programs too, built from files only those
@@ -130,22 +130,22 @@ jobs:
           pnpm run build:backend
 
       - name: Build
-        run: go build -tags goolm,stdjson ./...
+        run: go build ./...
 
       # As in the go job, for the dependencies only Windows or macOS builds.
       - name: Third-party notices
         run: |
           out="$RUNNER_TEMP/notices"
           mkdir -p "$out"
-          go build -tags goolm,stdjson -o "$out/compa-kernel" ./cmd/compa-kernel
-          go build -tags goolm,stdjson -o "$out/compa" ./web/backend
+          go build -o "$out/compa-kernel" ./cmd/compa-kernel
+          go build -o "$out/compa" ./web/backend
           sh scripts/notices.sh "$out"
 
       - name: Vet
-        run: go vet -tags goolm,stdjson ./...
+        run: go vet ./...
 
       - name: Test
-        run: go test -tags goolm,stdjson -p 1 ./...
+        run: go test -p 1 ./...
 
   race:
     name: go test -race
@@ -165,7 +165,7 @@ jobs:
           cache-dependency-path: go.sum
 
       - name: Test with the race detector
-        run: go test -race -tags goolm,stdjson -p 1 ./...
+        run: go test -race -p 1 ./...
 
   lint:
     name: golangci-lint / go.mod / govulncheck / doc links
@@ -193,7 +193,7 @@ jobs:
       # Fails only on vulnerabilities in code that is actually called.
       - name: govulncheck
         if: ${{ !cancelled() }}
-        run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 -tags goolm,stdjson ./...
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
 
       - name: Links in the Markdown docs
         if: ${{ !cancelled() }}

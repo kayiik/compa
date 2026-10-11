@@ -14,7 +14,7 @@ func TestRecallSimilarSkills_ReturnsWorkspaceSkillFirst(t *testing.T) {
 	globalHome := t.TempDir()
 	builtinRoot := t.TempDir()
 
-	t.Setenv("HOME", globalHome)
+	t.Setenv("COMPA_HOME", filepath.Join(globalHome, ".compa"))
 	t.Setenv("COMPA_BUILTIN_SKILLS", builtinRoot)
 
 	mustWriteSkill := func(root, name, content string) {
@@ -66,7 +66,7 @@ func TestRecallSimilarSkills_UsesExplicitWinningPathOnly(t *testing.T) {
 	globalHome := t.TempDir()
 	builtinRoot := t.TempDir()
 
-	t.Setenv("HOME", globalHome)
+	t.Setenv("COMPA_HOME", filepath.Join(globalHome, ".compa"))
 	t.Setenv("COMPA_BUILTIN_SKILLS", builtinRoot)
 
 	mustWriteSkill := func(root, name, description string) {

@@ -1240,11 +1240,11 @@ func TestGatewayStatusRequiresRestartAfterChannelChange(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
-	telegram := updatedCfg.Channels.Get("telegram")
-	if telegram == nil {
-		t.Fatalf("expected default telegram channel config")
+	slack := updatedCfg.Channels.Get("slack")
+	if slack == nil {
+		t.Fatalf("expected default slack channel config")
 	}
-	telegram.Enabled = !telegram.Enabled
+	slack.Enabled = !slack.Enabled
 	if err := config.SaveConfig(configPath, updatedCfg); err != nil {
 		t.Fatalf("SaveConfig() error = %v", err)
 	}

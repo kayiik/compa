@@ -25,7 +25,7 @@ func TestLoadConfigCompletesTheDefaults(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			secrets := "channel_list:\n  telegram:\n    settings:\n      token: tg-from-security\n"
+			secrets := "channel_list:\n  slack:\n    settings:\n      bot_token: xoxb-from-security\n"
 			if err := os.WriteFile(filepath.Join(dir, SecurityConfigFile), []byte(secrets), 0o600); err != nil {
 				t.Fatal(err)
 			}
@@ -38,12 +38,12 @@ func TestLoadConfigCompletesTheDefaults(t *testing.T) {
 			if cfg.Gateway.Port != 19999 {
 				t.Fatalf("gateway.port = %d, want 19999 from COMPA_GATEWAY_PORT", cfg.Gateway.Port)
 			}
-			decoded, err := cfg.Channels.Get("telegram").GetDecoded()
+			decoded, err := cfg.Channels.Get("slack").GetDecoded()
 			if err != nil {
 				t.Fatalf("GetDecoded() error = %v", err)
 			}
-			if got := decoded.(*TelegramSettings).Token.String(); got != "tg-from-security" {
-				t.Fatalf("telegram token = %q, want the .security.yml value", got)
+			if got := decoded.(*SlackSettings).BotToken.String(); got != "xoxb-from-security" {
+				t.Fatalf("slack bot token = %q, want the .security.yml value", got)
 			}
 		})
 	}

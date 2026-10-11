@@ -142,7 +142,7 @@ copies match their masters, every raster and ICO entry has its planned size, the
 manifest and theme colors match the tokens, and the app logo carries the fixed
 geometry. After changing a consumer, also run the app's own checks: `npx tsc -b`,
 `pnpm run lint`, `pnpm test`, and `pnpm run build` from `web/frontend`, and
-`go build -tags goolm,stdjson ./web/backend` from the repository root.
+`go build ./web/backend` from the repository root.
 
 The root `LICENSE` and `NOTICE` remain the authority for product software and
 upstream software attribution.

@@ -17,61 +17,61 @@ func TestToChannelHashes(t *testing.T) {
 	assert.Equal(t, 0, len(results))
 	logger.Debugf("results: %v", results)
 
-	// Add dingtalk channel via map
+	// Add whatsapp channel via map
 	cfg2 := config.DefaultConfig()
-	cfg2.Channels["dingtalk"] = &config.Channel{
+	cfg2.Channels["whatsapp"] = &config.Channel{
 		Enabled:  true,
-		Type:     config.ChannelDingTalk,
+		Type:     config.ChannelWhatsApp,
 		Settings: config.RawNode(`{"enabled":true}`),
 	}
 	results2 := toChannelHashes(cfg2)
 	assert.Equal(t, 1, len(results2))
 	logger.Debugf("results2: %v", results2)
 	added, removed := compareChannels(results, results2)
-	assert.EqualValues(t, []string{"dingtalk"}, added)
+	assert.EqualValues(t, []string{"whatsapp"}, added)
 	assert.EqualValues(t, []string(nil), removed)
 
-	// Add telegram channel
+	// Add slack channel
 	cfg3 := config.DefaultConfig()
-	cfg3.Channels["telegram"] = &config.Channel{
+	cfg3.Channels["slack"] = &config.Channel{
 		Enabled:  true,
-		Type:     config.ChannelTelegram,
-		Settings: config.RawNode(`{"enabled":true,"token":"test-token"}`),
+		Type:     config.ChannelSlack,
+		Settings: config.RawNode(`{"enabled":true,"bot_token":"test-token"}`),
 	}
 	results3 := toChannelHashes(cfg3)
 	assert.Equal(t, 1, len(results3))
 	logger.Debugf("results3: %v", results3)
 	added, removed = compareChannels(results2, results3)
-	assert.EqualValues(t, []string{"dingtalk"}, removed)
-	assert.EqualValues(t, []string{"telegram"}, added)
+	assert.EqualValues(t, []string{"whatsapp"}, removed)
+	assert.EqualValues(t, []string{"slack"}, added)
 
-	// Modify telegram channel — hash should change
-	cfg3.Channels["telegram"] = &config.Channel{
+	// Modify slack channel — hash should change
+	cfg3.Channels["slack"] = &config.Channel{
 		Enabled:  true,
-		Type:     config.ChannelTelegram,
-		Settings: config.RawNode(`{"enabled":true,"token":"114314"}`),
+		Type:     config.ChannelSlack,
+		Settings: config.RawNode(`{"enabled":true,"bot_token":"114314"}`),
 	}
 	results4 := toChannelHashes(cfg3)
 	assert.Equal(t, 1, len(results4))
 	logger.Debugf("results4: %v", results4)
 	added, removed = compareChannels(results3, results4)
-	assert.EqualValues(t, []string{"telegram"}, removed)
-	assert.EqualValues(t, []string{"telegram"}, added)
+	assert.EqualValues(t, []string{"slack"}, removed)
+	assert.EqualValues(t, []string{"slack"}, added)
 
-	// toChannelConfig with telegram
+	// toChannelConfig with slack
 	cc, err := toChannelConfig(cfg3, added)
 	assert.NoError(t, err)
-	bc := cc.Get("telegram")
+	bc := cc.Get("slack")
 	assert.NotNil(t, bc)
-	var tc config.TelegramSettings
-	bc.Decode(&tc)
-	assert.Equal(t, "114314", tc.Token.String())
+	var sc config.SlackSettings
+	bc.Decode(&sc)
+	assert.Equal(t, "114314", sc.BotToken.String())
 	assert.Equal(t, true, bc.Enabled)
 
-	// toChannelConfig with dingtalk (no telegram)
+	// toChannelConfig with whatsapp (no enabled slack)
 	cc, err = toChannelConfig(cfg2, added)
 	assert.NoError(t, err)
-	bc = cc.Get("telegram")
+	bc = cc.Get("slack")
 	assert.Nil(t, bc)
 }
 
@@ -136,20 +136,21 @@ func TestToChannelHashes_InvalidJSON(t *testing.T) {
 func TestToChannelHashes_RealWorldChannel(t *testing.T) {
 	cfg := config.DefaultConfig()
 
-	// Simulate a telegram channel config
-	telegramSettings, _ := json.Marshal(map[string]any{
-		"enabled": true,
-		"token":   "123456:ABC-DEF",
+	// Simulate a slack channel config
+	slackSettings, _ := json.Marshal(map[string]any{
+		"enabled":   true,
+		"bot_token": "xoxb-123456",
+		"app_token": "xapp-123456",
 	})
-	cfg.Channels["telegram"] = &config.Channel{
+	cfg.Channels["slack"] = &config.Channel{
 		Enabled:  true,
-		Type:     config.ChannelTelegram,
-		Settings: config.RawNode(telegramSettings),
+		Type:     config.ChannelSlack,
+		Settings: config.RawNode(slackSettings),
 	}
 
 	h := toChannelHashes(cfg)
 	assert.Equal(t, 1, len(h))
-	assert.Contains(t, h, "telegram")
+	assert.Contains(t, h, "slack")
 }
 
 func TestToChannelHashes_MissingEnabledKey(t *testing.T) {

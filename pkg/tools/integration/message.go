@@ -76,7 +76,7 @@ func (t *MessageTool) Parameters() map[string]any {
 		},
 		"channel": map[string]any{
 			"type":        "string",
-			"description": "Optional: target channel (telegram, whatsapp, etc.); defaults to the current chat's",
+			"description": "Optional: target channel (whatsapp, slack, etc.); defaults to the current chat's",
 		},
 		"chat_id": map[string]any{
 			"type":        "string",

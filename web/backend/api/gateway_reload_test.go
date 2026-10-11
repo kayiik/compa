@@ -252,10 +252,10 @@ func TestApplyLiveChangesOnlyAppliesSavedChangesToARunningGateway(t *testing.T) 
 func TestPairingApprovalReloadsTheRunningGateway(t *testing.T) {
 	resetGatewayTestState(t)
 	h, mux, home := pairingTestHandler(t)
-	recordPairingRequest(t, home, pairing.Request{Channel: "telegram", SenderID: "telegram:123"})
+	recordPairingRequest(t, home, pairing.Request{Channel: "whatsapp", SenderID: "whatsapp:123"})
 	reloads := trackedFakeGateway(t, loadSavedConfig(t, h.configPath), http.StatusOK, nil)
 
-	rec := pairingRequestJSON(t, mux, http.MethodPost, "/api/channels/telegram/pairing/approve", `{"sender_id":"telegram:123"}`)
+	rec := pairingRequestJSON(t, mux, http.MethodPost, "/api/channels/whatsapp/pairing/approve", `{"sender_id":"whatsapp:123"}`)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("approve = %d %s", rec.Code, rec.Body.String())
 	}
@@ -275,10 +275,10 @@ func TestPairingApprovalReloadsTheRunningGateway(t *testing.T) {
 func TestPairingApprovalThatFailsToReloadRequiresARestart(t *testing.T) {
 	resetGatewayTestState(t)
 	h, mux, home := pairingTestHandler(t)
-	recordPairingRequest(t, home, pairing.Request{Channel: "telegram", SenderID: "telegram:123"})
+	recordPairingRequest(t, home, pairing.Request{Channel: "whatsapp", SenderID: "whatsapp:123"})
 	reloads := trackedFakeGateway(t, loadSavedConfig(t, h.configPath), http.StatusInternalServerError, nil)
 
-	pairingRequestJSON(t, mux, http.MethodPost, "/api/channels/telegram/pairing/approve", `{"sender_id":"telegram:123"}`)
+	pairingRequestJSON(t, mux, http.MethodPost, "/api/channels/whatsapp/pairing/approve", `{"sender_id":"whatsapp:123"}`)
 	h.waitForLiveApplies()
 	if reloads.Load() != 1 {
 		t.Fatalf("gateway reloads = %d, want 1", reloads.Load())

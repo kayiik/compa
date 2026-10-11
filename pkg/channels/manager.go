@@ -67,13 +67,7 @@ type placeholderEntry struct {
 
 // channelRateConfig maps channel name to per-second rate limit.
 var channelRateConfig = map[string]float64{
-	"telegram": 20,
-	"discord":  1,
-	"slack":    1,
-	"matrix":   2,
-	"line":     10,
-	"qq":       5,
-	"irc":      2,
+	"slack": 1,
 }
 
 type channelWorker struct {
@@ -310,7 +304,7 @@ func clearTrackedToolFeedbackMessage(
 // given channel/chat. This is called when a turn ends without a final
 // response (e.g., ResponseHandled tools) to stop orphaned animation goroutines.
 // outboundCtx carries topic/thread info for channels that use scoped tracker
-// keys (e.g., Telegram forum topics); may be nil for non-topic channels.
+// keys (e.g., Slack threads); may be nil for non-topic channels.
 func (m *Manager) DismissToolFeedback(
 	ctx context.Context, channelName, chatID string, outboundCtx *bus.InboundContext,
 ) {
@@ -1068,8 +1062,8 @@ func (s *finalizeHookStreamer) ClearFinalizedStreamMarker() {
 }
 
 // initChannel is a helper that looks up a factory by type name and creates the channel.
-// typeName is the channel type used for factory lookup (e.g., "telegram").
-// channelName is the config map key used as the channel's runtime name (e.g., "my_telegram").
+// typeName is the channel type used for factory lookup (e.g., "slack").
+// channelName is the config map key used as the channel's runtime name (e.g., "my_slack").
 func (m *Manager) initChannel(typeName, channelName string) {
 	f, ok := getFactory(typeName)
 	if !ok {
@@ -1161,45 +1155,17 @@ func (m *Manager) getChannelConfigAndEnabled(channelName string) (*config.Channe
 	case *config.WhatsAppSettings:
 		// Ready when enabled; Start reports a WhatsApp not linked yet.
 		return bc, true
-	case *config.MatrixSettings:
-		return bc, settings.Homeserver != "" && settings.UserID != "" && settings.AccessToken.String() != ""
-	case *config.WeComSettings:
-		return bc, settings.BotID != "" && settings.Secret.String() != ""
 	case *config.WebChatClientSettings:
 		return bc, settings.URL != ""
-	case *config.DingTalkSettings:
-		return bc, settings.ClientID != ""
 	case *config.SlackSettings:
 		// Socket Mode needs the app-level token as well as the bot token.
 		return bc, settings.BotToken.String() != "" && settings.AppToken.String() != ""
-	case *config.WeixinSettings:
-		return bc, settings.Token.String() != ""
 	case *config.WebChatSettings:
 		return bc, settings.Token.String() != ""
-	case *config.IRCSettings:
-		return bc, settings.Server != ""
-	case *config.LINESettings:
-		return bc, settings.ChannelAccessToken.String() != ""
-	case *config.OneBotSettings:
-		return bc, settings.WSUrl != ""
-	case *config.QQSettings:
-		return bc, settings.AppSecret.String() != ""
-	case *config.TelegramSettings:
-		return bc, settings.Token.String() != ""
-	case *config.FeishuSettings:
-		return bc, settings.AppSecret.String() != ""
-	case *config.MaixCamSettings:
-		return bc, true
 	case *config.TeamsWebhookSettings:
 		return bc, true
 	case *config.SlackWebhookSettings:
 		return bc, true
-	case *config.DiscordSettings:
-		return bc, settings.Token.String() != ""
-	case *config.VKSettings:
-		return bc, settings.GroupID != 0 && settings.Token.String() != ""
-	case *config.MQTTSettings:
-		return bc, settings.Broker != "" && settings.AgentID != ""
 	}
 
 	return bc, bc.Enabled

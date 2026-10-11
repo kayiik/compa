@@ -12,7 +12,7 @@ describe("activeNavUrl", () => {
 
   it("keeps a channel page under the one Channels entry", () => {
     expect(activeNavUrl("/channels", URLS)).toBe("/channels")
-    expect(activeNavUrl("/channels/telegram", URLS)).toBe("/channels")
+    expect(activeNavUrl("/channels/slack", URLS)).toBe("/channels")
   })
 
   it("prefers the longest entry, so Voice is not Config", () => {

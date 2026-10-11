@@ -149,8 +149,8 @@ cd web/frontend
 pnpm install --frozen-lockfile
 pnpm run build:backend
 cd ../..
-go build -tags goolm,stdjson -o build/compa-kernel ./cmd/compa-kernel
-go build -tags goolm,stdjson -o build/compa ./web/backend
+go build -o build/compa-kernel ./cmd/compa-kernel
+go build -o build/compa ./web/backend
 ./build/compa
 ```
 

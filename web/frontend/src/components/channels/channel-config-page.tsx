@@ -30,14 +30,8 @@ import {
   isSecretField,
 } from "@/components/channels/channel-config-fields"
 import { getChannelDisplayName } from "@/components/channels/channel-display-name"
-import { DiscordForm } from "@/components/channels/channel-forms/discord-form"
-import { FeishuForm } from "@/components/channels/channel-forms/feishu-form"
 import { GenericForm } from "@/components/channels/channel-forms/generic-form"
-import { MqttForm } from "@/components/channels/channel-forms/mqtt-form"
 import { SlackForm } from "@/components/channels/channel-forms/slack-form"
-import { TelegramForm } from "@/components/channels/channel-forms/telegram-form"
-import { WecomForm } from "@/components/channels/channel-forms/wecom-form"
-import { WeixinForm } from "@/components/channels/channel-forms/weixin-form"
 import { WhatsAppForm } from "@/components/channels/channel-forms/whatsapp-form"
 import { ChannelPairingRequests } from "@/components/channels/channel-pairing-requests"
 import { ConfigChangeNotice } from "@/components/config-change-notice"
@@ -101,19 +95,6 @@ const CHANNEL_COMMON_CONFIG_KEYS = new Set([
   "typing",
 ])
 
-function normalizeConfig(
-  channel: SupportedChannel,
-  rawConfig: ChannelConfig,
-): ChannelConfig {
-  const config = { ...rawConfig }
-  if (channel.name === "line") {
-    // The gateway serves the LINE webhook; these never had an effect.
-    delete config.webhook_host
-    delete config.webhook_port
-  }
-  return config
-}
-
 function buildSavePayload(
   channel: SupportedChannel,
   editConfig: ChannelConfig,
@@ -159,89 +140,12 @@ function buildSavePayload(
   return payload
 }
 
-function isConfigured(
-  channel: SupportedChannel,
-  config: ChannelConfig,
-  configuredSecrets: readonly string[],
-): boolean {
-  const hasValue = (key: string) =>
-    !isMissingRequiredValue(
-      getFieldValueForValidation(config, configuredSecrets, key),
-    )
-
-  switch (channel.name) {
-    case "telegram":
-      return hasValue("token")
-    case "discord":
-      return hasValue("token")
-    case "slack":
-      return hasValue("bot_token") && hasValue("app_token")
-    case "feishu":
-      return hasValue("app_id") && hasValue("app_secret")
-    case "dingtalk":
-      return hasValue("client_id") && hasValue("client_secret")
-    case "line":
-      return hasValue("channel_secret") && hasValue("channel_access_token")
-    case "qq":
-      return hasValue("app_id") && hasValue("app_secret")
-    case "onebot":
-      return hasValue("ws_url")
-    case "weixin":
-      return hasValue("account_id")
-    case "wecom":
-      return hasValue("bot_id")
-    case "whatsapp":
-      // Linking the account is separate from the config.
-      return true
-    case "web":
-      return hasValue("token")
-    case "maixcam":
-      return hasValue("host")
-    case "matrix":
-      return (
-        hasValue("homeserver") &&
-        hasValue("user_id") &&
-        hasValue("access_token")
-      )
-    case "irc":
-      return hasValue("server")
-    case "mqtt":
-      return hasValue("broker") && hasValue("agent_id")
-    default:
-      return false
-  }
-}
-
 function getRequiredFieldKeys(channelName: string): string[] {
   switch (channelName) {
-    case "telegram":
-      return ["token"]
-    case "discord":
-      return ["token"]
     case "slack":
       return ["bot_token", "app_token"]
-    case "feishu":
-      return ["app_id", "app_secret"]
-    case "dingtalk":
-      return ["client_id", "client_secret"]
-    case "line":
-      return ["channel_secret", "channel_access_token"]
-    case "qq":
-      return ["app_id", "app_secret"]
-    case "onebot":
-      return ["ws_url"]
-    case "wecom":
-      return []
     case "web":
       return ["token"]
-    case "maixcam":
-      return ["host"]
-    case "matrix":
-      return ["homeserver", "user_id", "access_token"]
-    case "irc":
-      return ["server"]
-    case "mqtt":
-      return ["broker", "agent_id"]
     default:
       return []
   }
@@ -315,14 +219,13 @@ export function ChannelConfigPage({ channelName }: ChannelConfigPageProps) {
 
         const channelConfig = await getChannelConfig(channelName)
         if (loadRequestIdRef.current !== requestId) return
-        const raw = asRecord(channelConfig.config)
-        const normalized = normalizeConfig(matched, raw)
+        const loadedConfig = asRecord(channelConfig.config)
 
         setChannel(matched)
-        setBaseConfig(normalized)
-        setEditConfig(buildEditConfig(matched.name, normalized))
+        setBaseConfig(loadedConfig)
+        setEditConfig(buildEditConfig(matched.name, loadedConfig))
         setConfiguredSecrets(channelConfig.configured_secrets ?? [])
-        setEnabled(asBool(normalized.enabled))
+        setEnabled(asBool(loadedConfig.enabled))
         setFetchError("")
         setServerError("")
         setFieldErrors({})
@@ -344,11 +247,6 @@ export function ChannelConfigPage({ channelName }: ChannelConfigPageProps) {
     setLoading(true)
     loadData()
   }, [loadData, resetPageState])
-
-  const configured = useMemo(() => {
-    if (!channel) return false
-    return isConfigured(channel, editConfig, configuredSecrets)
-  }, [channel, configuredSecrets, editConfig])
 
   const isDirty = useMemo(() => {
     if (loading || !channel || channel.name !== channelName) return false
@@ -379,7 +277,6 @@ export function ChannelConfigPage({ channelName }: ChannelConfigPageProps) {
     return getChannelDisplayName(channel, t)
   }, [channel, channelName, t])
 
-  const hidesPageLevelEnableToggle = channel?.name === "wecom"
   // Pairing binds the owner's account once: while the saved allow_from lists
   // no account, the gateway records who sends the bot a direct message, and
   // approving one adds that account. The web chat needs no pairing, and
@@ -495,7 +392,7 @@ export function ChannelConfigPage({ channelName }: ChannelConfigPageProps) {
     }
   }
 
-  // A QR binding saved the account and enabled the channel server-side.
+  // A WhatsApp link saved the account and enabled the channel server-side.
   const handleBindSuccess = useCallback(async () => {
     try {
       setEnabled(true)
@@ -507,24 +404,6 @@ export function ChannelConfigPage({ channelName }: ChannelConfigPageProps) {
       await loadData(true)
     }
   }, [loadData, t])
-
-  const handleWecomEnabledChange = useCallback(
-    async (nextEnabled: boolean) => {
-      try {
-        setEnabled(nextEnabled)
-        await Promise.all([
-          loadData(true),
-          refreshGatewayState({ force: true }),
-        ])
-      } catch (e) {
-        const message =
-          e instanceof Error ? e.message : t("channels.page.saveError")
-        setServerError(message)
-        await loadData(true)
-      }
-    },
-    [loadData, t],
-  )
 
   // An approved sender is in the saved allow_from now. Adding it to the
   // loaded and the edited config keeps unsaved edits, a later save keeps the
@@ -543,31 +422,8 @@ export function ChannelConfigPage({ channelName }: ChannelConfigPageProps) {
 
   const renderForm = () => {
     if (!channel) return null
-    const isEdit = configured
 
     switch (channel.name) {
-      case "telegram":
-        return (
-          <TelegramForm
-            config={editConfig}
-            onChange={handleChange}
-            configuredSecrets={configuredSecrets}
-            fieldErrors={fieldErrors}
-            registerArrayFieldFlusher={registerArrayFieldFlusher}
-            arrayFieldResetVersion={arrayFieldResetVersion}
-          />
-        )
-      case "discord":
-        return (
-          <DiscordForm
-            config={editConfig}
-            onChange={handleChange}
-            configuredSecrets={configuredSecrets}
-            fieldErrors={fieldErrors}
-            registerArrayFieldFlusher={registerArrayFieldFlusher}
-            arrayFieldResetVersion={arrayFieldResetVersion}
-          />
-        )
       case "slack":
         return (
           <SlackForm
@@ -575,37 +431,6 @@ export function ChannelConfigPage({ channelName }: ChannelConfigPageProps) {
             onChange={handleChange}
             configuredSecrets={configuredSecrets}
             fieldErrors={fieldErrors}
-            registerArrayFieldFlusher={registerArrayFieldFlusher}
-            arrayFieldResetVersion={arrayFieldResetVersion}
-          />
-        )
-      case "feishu":
-        return (
-          <FeishuForm
-            config={editConfig}
-            onChange={handleChange}
-            configuredSecrets={configuredSecrets}
-            fieldErrors={fieldErrors}
-            registerArrayFieldFlusher={registerArrayFieldFlusher}
-            arrayFieldResetVersion={arrayFieldResetVersion}
-          />
-        )
-      case "mqtt":
-        return (
-          <MqttForm
-            config={editConfig}
-            onChange={handleChange}
-            configuredSecrets={configuredSecrets}
-            fieldErrors={fieldErrors}
-          />
-        )
-      case "weixin":
-        return (
-          <WeixinForm
-            config={editConfig}
-            onChange={handleChange}
-            isEdit={isEdit}
-            onBindSuccess={() => void handleBindSuccess()}
             registerArrayFieldFlusher={registerArrayFieldFlusher}
             arrayFieldResetVersion={arrayFieldResetVersion}
           />
@@ -619,31 +444,6 @@ export function ChannelConfigPage({ channelName }: ChannelConfigPageProps) {
             registerArrayFieldFlusher={registerArrayFieldFlusher}
             arrayFieldResetVersion={arrayFieldResetVersion}
           />
-        )
-      case "wecom":
-        return (
-          <>
-            <WecomForm
-              config={editConfig}
-              isEdit={isEdit}
-              onBindSuccess={() => void handleBindSuccess()}
-              onEnabledChange={(nextEnabled) =>
-                void handleWecomEnabledChange(nextEnabled)
-              }
-            />
-            <GenericForm
-              config={editConfig}
-              onChange={handleChange}
-              configuredSecrets={configuredSecrets}
-              hiddenKeys={["bot_id"]}
-              requiredKeys={requiredKeys}
-              supportsStreaming
-              accessPolicy
-              fieldErrors={fieldErrors}
-              registerArrayFieldFlusher={registerArrayFieldFlusher}
-              arrayFieldResetVersion={arrayFieldResetVersion}
-            />
-          </>
         )
       default:
         return (
@@ -693,18 +493,16 @@ export function ChannelConfigPage({ channelName }: ChannelConfigPageProps) {
           </div>
         ) : (
           <div className="w-full max-w-4xl space-y-6 pt-5">
-            {!hidesPageLevelEnableToggle && (
-              <div className="bg-card text-card-foreground border-border/60 flex items-center justify-between rounded-xl border px-6 py-4 shadow-sm">
-                <p className="text-sm font-medium">
-                  {t("channels.page.enableLabel")}
-                </p>
-                <Switch
-                  checked={enabled}
-                  onCheckedChange={setEnabled}
-                  aria-label={t("channels.page.enableLabel")}
-                />
-              </div>
-            )}
+            <div className="bg-card text-card-foreground border-border/60 flex items-center justify-between rounded-xl border px-6 py-4 shadow-sm">
+              <p className="text-sm font-medium">
+                {t("channels.page.enableLabel")}
+              </p>
+              <Switch
+                checked={enabled}
+                onCheckedChange={setEnabled}
+                aria-label={t("channels.page.enableLabel")}
+              />
+            </div>
 
             {channel && showsPairingRequests && (
               <ChannelPairingRequests

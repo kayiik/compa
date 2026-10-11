@@ -49,7 +49,7 @@ func installCLIEnabledFakeModule(t *testing.T, home string) string {
 	if runtime.GOOS == "windows" {
 		name += ".exe"
 	}
-	command := exec.Command("go", "build", "-tags", "goolm,stdjson", "-o", filepath.Join(dir, name), "../../cmd/fakemodule")
+	command := exec.Command("go", "build", "-o", filepath.Join(dir, name), "../../cmd/fakemodule")
 	if out, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("build fake module: %v\n%s", err, out)
 	}

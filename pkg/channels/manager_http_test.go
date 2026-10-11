@@ -68,14 +68,14 @@ func TestToChannelHashesSeesSecretsOfRenamedChannels(t *testing.T) {
 		cfg := &config.Config{Channels: config.ChannelsConfig{}}
 		bc := &config.Channel{
 			Enabled:  true,
-			Type:     config.ChannelTelegram,
+			Type:     config.ChannelSlack,
 			Settings: config.RawNode(`{}`),
 		}
-		settings := &config.TelegramSettings{}
+		settings := &config.SlackSettings{}
 		if err := bc.Decode(settings); err != nil {
 			t.Fatalf("Decode() error = %v", err)
 		}
-		settings.Token.Set(token)
+		settings.BotToken.Set(token)
 		cfg.Channels["my_bot"] = bc
 		return toChannelHashes(cfg)["my_bot"]
 	}
@@ -98,11 +98,17 @@ func TestToChannelHashesSeeEverySecret(t *testing.T) {
 		cfg := &config.Config{Channels: config.ChannelsConfig{"ch": bc}}
 		return toChannelHashes(cfg)["ch"]
 	}
-	vk := &config.VKSettings{}
-	vkA := hashFor(config.ChannelVK, vk, func() { vk.SetToken("vk-a") })
-	vkB := hashFor(config.ChannelVK, vk, func() { vk.SetToken("vk-b") })
-	if vkA == "" || vkA == vkB {
-		t.Error("a VK token change does not change the channel's hash")
+	slack := &config.SlackSettings{}
+	slackA := hashFor(config.ChannelSlack, slack, func() { slack.AppToken.Set("xapp-a") })
+	slackB := hashFor(config.ChannelSlack, slack, func() { slack.AppToken.Set("xapp-b") })
+	if slackA == "" || slackA == slackB {
+		t.Error("a Slack app token change does not change the channel's hash")
+	}
+	web := &config.WebChatSettings{}
+	webA := hashFor(config.ChannelWeb, web, func() { web.SetToken("web-a") })
+	webB := hashFor(config.ChannelWeb, web, func() { web.SetToken("web-b") })
+	if webA == "" || webA == webB {
+		t.Error("a web token change does not change the channel's hash")
 	}
 	teams := &config.TeamsWebhookSettings{}
 	teamsFor := func(url string) string {

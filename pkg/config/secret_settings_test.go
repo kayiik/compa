@@ -12,7 +12,7 @@ import (
 
 // plainSecretsConfig is a config.json with plain secrets, as an edit sends
 // them: the MCP env and headers, a hook's env, a provider instance's headers
-// and the Matrix passphrase.
+// and the Slack app token.
 const plainSecretsConfig = `{
   "tools": {"mcp": {"enabled": true, "servers": {"github": {
     "enabled": true, "command": "npx",
@@ -22,20 +22,20 @@ const plainSecretsConfig = `{
   "hooks": {"processes": {"audit": {"enabled": true, "command": ["audit"], "env": {"AUDIT_KEY": "hook-plain-key"}}}},
   "provider_instances": [{"id": "gw", "provider_kind": "openai", "adapter": "openai-compatible", "protocol": "openai",
     "state": "enabled", "headers": {"X-Api-Key": "provider-plain-header"}}],
-  "channel_list": {"matrix": {"enabled": false, "type": "matrix", "settings": {"crypto_passphrase": "matrix-plain-pass"}}}
+  "channel_list": {"slack": {"enabled": false, "type": "slack", "settings": {"app_token": "slack-plain-app-token"}}}
 }`
 
 var plainSecretValues = []string{
-	"ghp-plain-token", "mcp-plain-header", "hook-plain-key", "provider-plain-header", "matrix-plain-pass",
+	"ghp-plain-token", "mcp-plain-header", "hook-plain-key", "provider-plain-header", "slack-plain-app-token",
 }
 
-func matrixPassphrase(t *testing.T, cfg *Config) string {
+func slackAppToken(t *testing.T, cfg *Config) string {
 	t.Helper()
-	decoded, err := cfg.Channels.Get("matrix").GetDecoded()
+	decoded, err := cfg.Channels.Get("slack").GetDecoded()
 	if err != nil {
 		t.Fatalf("GetDecoded() error = %v", err)
 	}
-	return decoded.(*MatrixSettings).CryptoPassphrase.String()
+	return decoded.(*SlackSettings).AppToken.String()
 }
 
 func assertPlainSecretsLoaded(t *testing.T, cfg *Config) {
@@ -51,8 +51,8 @@ func assertPlainSecretsLoaded(t *testing.T, cfg *Config) {
 	if got := cfg.ProviderInstances[0].Headers["X-Api-Key"]; got != "provider-plain-header" {
 		t.Fatalf("provider header = %q", got)
 	}
-	if got := matrixPassphrase(t, cfg); got != "matrix-plain-pass" {
-		t.Fatalf("matrix crypto_passphrase = %q", got)
+	if got := slackAppToken(t, cfg); got != "slack-plain-app-token" {
+		t.Fatalf("slack app_token = %q", got)
 	}
 }
 
@@ -165,7 +165,7 @@ func TestSecretSettingsAreFilteredAndRedacted(t *testing.T) {
 	}
 	sensitive := cfg.collectSensitiveValues()
 	for _, value := range []string{
-		"ghp-plain-token", "Bearer mcp-plain-header", "hook-plain-key", "provider-plain-header", "matrix-plain-pass",
+		"ghp-plain-token", "Bearer mcp-plain-header", "hook-plain-key", "provider-plain-header", "slack-plain-app-token",
 	} {
 		found := false
 		for _, s := range sensitive {
@@ -183,8 +183,8 @@ func TestSecretSettingsAreFilteredAndRedacted(t *testing.T) {
 	if got := cfg.FilterSensitiveData("token=ghp-plain-token"); strings.Contains(got, "ghp-plain-token") {
 		t.Fatalf("FilterSensitiveData() = %q", got)
 	}
-	if got := logger.Redact("pass matrix-plain-pass"); strings.Contains(got, "matrix-plain-pass") {
-		t.Fatalf("logger.Redact() = %q, want the passphrase registered", got)
+	if got := logger.Redact("token slack-plain-app-token"); strings.Contains(got, "slack-plain-app-token") {
+		t.Fatalf("logger.Redact() = %q, want the app token registered", got)
 	}
 }
 
@@ -199,11 +199,11 @@ func TestSecretFileReferencesSurviveSaves(t *testing.T) {
   "hooks": {"processes": {"audit": {"enabled": true, "command": ["audit"], "env": {"AUDIT_KEY": "[NOT_HERE]"}}}},
   "provider_instances": [{"id": "gw", "provider_kind": "openai", "adapter": "openai-compatible", "protocol": "openai",
     "state": "enabled", "headers": {"X-Api-Key": "[NOT_HERE]"}}],
-  "channel_list": {"matrix": {"enabled": false, "type": "matrix", "settings": {}}}
+  "channel_list": {"slack": {"enabled": false, "type": "slack", "settings": {}}}
 }`, `channel_list:
-  matrix:
+  slack:
     settings:
-      crypto_passphrase: file://matrix.pass
+      app_token: file://slack.token
 mcp:
   servers:
     github:
@@ -222,7 +222,7 @@ provider_instances:
 	dir := filepath.Dir(path)
 	files := map[string]string{
 		"gh.token": "ghp-from-file", "hook.key": "hook-from-file",
-		"provider.key": "provider-from-file", "matrix.pass": "matrix-from-file",
+		"provider.key": "provider-from-file", "slack.token": "slack-from-file",
 	}
 	for name, value := range files {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(value+"\n"), 0o600); err != nil {
@@ -231,7 +231,7 @@ provider_instances:
 	}
 	references := []string{
 		"TOKEN: file://gh.token", "AUDIT_KEY: file://hook.key", "X-Api-Key: file://provider.key",
-		"crypto_passphrase: file://matrix.pass",
+		"app_token: file://slack.token",
 	}
 	assertReferencesKept := func(t *testing.T, step string, references []string) {
 		t.Helper()
@@ -255,8 +255,8 @@ provider_instances:
 	if got := cfg.Tools.MCP.Servers["github"].Env["TOKEN"]; got != "ghp-from-file" {
 		t.Fatalf("TOKEN = %q, want the referenced file's value", got)
 	}
-	if got := matrixPassphrase(t, cfg); got != "matrix-from-file" {
-		t.Fatalf("crypto_passphrase = %q, want the referenced file's value", got)
+	if got := slackAppToken(t, cfg); got != "slack-from-file" {
+		t.Fatalf("app_token = %q, want the referenced file's value", got)
 	}
 	if err := SaveConfig(path, cfg); err != nil {
 		t.Fatalf("SaveConfig() error = %v", err)
@@ -315,18 +315,18 @@ provider_instances:
 // secret and channel settings without theirs, and decodes what comes back:
 // the stored secrets are kept, and an edited one is saved.
 func TestSecureStringsRoundTripThroughTheConfigAPI(t *testing.T) {
-	path := writeEnvTestConfig(t, `{"channel_list": {"telegram": {"enabled": true, "type": "telegram", "settings": {}}}}`, "")
+	path := writeEnvTestConfig(t, `{"channel_list": {"slack": {"enabled": true, "type": "slack", "settings": {}}}}`, "")
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
 	cfg.Tools.Web.Brave.SetAPIKey("brave-stored")
 	cfg.Tools.Web.Tavily.SetAPIKey("tavily-stored")
-	telegram, err := cfg.Channels.Get("telegram").GetDecoded()
+	slack, err := cfg.Channels.Get("slack").GetDecoded()
 	if err != nil {
 		t.Fatalf("GetDecoded() error = %v", err)
 	}
-	telegram.(*TelegramSettings).Token = *NewSecureString("telegram-stored")
+	slack.(*SlackSettings).BotToken = *NewSecureString("slack-stored")
 	if err := SaveConfig(path, cfg); err != nil {
 		t.Fatalf("SaveConfig() error = %v", err)
 	}
@@ -335,7 +335,7 @@ func TestSecureStringsRoundTripThroughTheConfigAPI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, value := range []string{"brave-stored", "tavily-stored", "telegram-stored"} {
+	for _, value := range []string{"brave-stored", "tavily-stored", "slack-stored"} {
 		if strings.Contains(string(data), value) {
 			t.Fatalf("JSON shows %q", value)
 		}
@@ -369,12 +369,12 @@ func TestSecureStringsRoundTripThroughTheConfigAPI(t *testing.T) {
 	if got := reloaded.Tools.Web.Tavily.APIKey(); got != "tavily-new" {
 		t.Errorf("tavily key = %q, want the edit saved", got)
 	}
-	decoded, err := reloaded.Channels.Get("telegram").GetDecoded()
+	decoded, err := reloaded.Channels.Get("slack").GetDecoded()
 	if err != nil {
 		t.Fatalf("GetDecoded() error = %v", err)
 	}
-	if got := decoded.(*TelegramSettings).Token.String(); got != "telegram-stored" {
-		t.Errorf("telegram token = %q, want the stored one kept", got)
+	if got := decoded.(*SlackSettings).BotToken.String(); got != "slack-stored" {
+		t.Errorf("slack bot token = %q, want the stored one kept", got)
 	}
 }
 
@@ -389,20 +389,20 @@ func TestSecurityFileOutput(t *testing.T) {
 	cfg.Tools.MCP.Servers = map[string]MCPServerConfig{
 		"github": {Command: "npx", Env: map[string]string{"TOKEN": "mcp-token"}},
 	}
-	telegram := &Channel{Type: ChannelTelegram, Enabled: true}
-	if err := telegram.Decode(&TelegramSettings{Token: *NewSecureString("tg-token")}); err != nil {
+	slack := &Channel{Type: ChannelSlack, Enabled: true}
+	if err := slack.Decode(&SlackSettings{BotToken: *NewSecureString("xoxb-token")}); err != nil {
 		t.Fatal(err)
 	}
-	cfg.Channels["telegram"] = telegram
+	cfg.Channels["slack"] = slack
 
 	data, err := marshalSecurityConfig(cfg, secretMapsFile{})
 	if err != nil {
 		t.Fatalf("marshalSecurityConfig() error = %v", err)
 	}
 	const want = `channel_list:
-  telegram:
+  slack:
     settings:
-      token: tg-token
+      bot_token: xoxb-token
 web:
   brave:
     api_keys:

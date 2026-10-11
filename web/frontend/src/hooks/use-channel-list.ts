@@ -1,18 +1,8 @@
 import {
   IconBrandChrome,
-  IconBrandDingtalk,
-  IconBrandDiscord,
-  IconBrandLine,
-  IconBrandMatrix,
-  IconBrandQq,
   IconBrandSlack,
-  IconBrandTelegram,
-  IconBrandWechat,
   IconBrandWhatsapp,
-  IconCamera,
-  IconMessages,
   IconPlug,
-  IconRobot,
 } from "@tabler/icons-react"
 import type { TFunction } from "i18next"
 import { useAtomValue } from "jotai"
@@ -27,59 +17,18 @@ import {
 import { getChannelDisplayName } from "@/components/channels/channel-display-name"
 import { gatewayAtom } from "@/store/gateway"
 
-const CHANNEL_IMPORTANCE_TAIL = [
-  "slack",
-  "line",
-  "wecom",
-  "dingtalk",
-  "qq",
-  "onebot",
-  "matrix",
-  "web",
-  "maixcam",
-  "irc",
-  "whatsapp",
-]
-
-function getChannelImportanceOrder(language: string): string[] {
-  const priority = language.startsWith("zh")
-    ? ["feishu", "weixin", "discord", "telegram"]
-    : ["discord", "telegram", "feishu", "weixin"]
-  return [...priority, ...CHANNEL_IMPORTANCE_TAIL]
-}
-
-function IconLark({ className }: { className?: string }) {
-  return React.createElement("span", {
-    className,
-    "aria-hidden": "true",
-    style: {
-      display: "inline-block",
-      backgroundColor: "currentColor",
-      mask: "url(/lark.svg) center / contain no-repeat",
-      WebkitMask: "url(/lark.svg) center / contain no-repeat",
-    } as React.CSSProperties,
-  })
-}
+// The order the chat apps are listed in, after the enabled ones.
+const CHANNEL_IMPORTANCE_INDEX = new Map(
+  ["slack", "whatsapp"].map((name, index) => [name, index]),
+)
 
 const CHANNEL_ICON_MAP: Record<
   string,
   React.ComponentType<{ className?: string }>
 > = {
-  telegram: IconBrandTelegram,
-  discord: IconBrandDiscord,
   slack: IconBrandSlack,
-  feishu: IconLark,
-  dingtalk: IconBrandDingtalk,
-  line: IconBrandLine,
-  qq: IconBrandQq,
-  weixin: IconBrandWechat,
-  wecom: IconBrandWechat,
   whatsapp: IconBrandWhatsapp,
-  matrix: IconBrandMatrix,
-  maixcam: IconCamera,
-  onebot: IconRobot,
   web: IconBrandChrome,
-  irc: IconMessages,
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -122,16 +71,14 @@ export interface ChannelListItem {
 }
 
 interface UseChannelListOptions {
-  language: string
   t: TFunction
 }
 
 /**
  * Every chat app channel the gateway supports, enabled ones first and then
- * by how widely each is used in the UI language's region. The browser chat's
- * own channel is left out.
+ * by how widely each is used. The browser chat's own channel is left out.
  */
-export function useChannelList({ language, t }: UseChannelListOptions) {
+export function useChannelList({ t }: UseChannelListOptions) {
   const gateway = useAtomValue(gatewayAtom)
   const [channels, setChannels] = React.useState<SupportedChannel[]>([])
   const [enabledMap, setEnabledMap] = React.useState<Record<string, boolean>>(
@@ -186,12 +133,6 @@ export function useChannelList({ language, t }: UseChannelListOptions) {
     previousGatewayStatusRef.current = gateway.status
   }, [gateway.status, reloadChannels])
 
-  const channelImportanceIndex = React.useMemo(() => {
-    return new Map(
-      getChannelImportanceOrder(language).map((name, index) => [name, index]),
-    )
-  }, [language])
-
   const items = React.useMemo<ChannelListItem[]>(() => {
     const list = [...channels]
     list.sort((a, b) => {
@@ -202,9 +143,9 @@ export function useChannelList({ language, t }: UseChannelListOptions) {
       }
 
       const aImportance =
-        channelImportanceIndex.get(a.name) ?? Number.MAX_SAFE_INTEGER
+        CHANNEL_IMPORTANCE_INDEX.get(a.name) ?? Number.MAX_SAFE_INTEGER
       const bImportance =
-        channelImportanceIndex.get(b.name) ?? Number.MAX_SAFE_INTEGER
+        CHANNEL_IMPORTANCE_INDEX.get(b.name) ?? Number.MAX_SAFE_INTEGER
       if (aImportance !== bImportance) {
         return aImportance - bImportance
       }
@@ -220,7 +161,7 @@ export function useChannelList({ language, t }: UseChannelListOptions) {
       icon: CHANNEL_ICON_MAP[channel.name] ?? IconPlug,
       enabled: enabledMap[channel.name] === true,
     }))
-  }, [channelImportanceIndex, channels, enabledMap, t])
+  }, [channels, enabledMap, t])
 
   return { channels: items, loading, error }
 }

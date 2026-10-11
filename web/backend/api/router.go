@@ -11,10 +11,6 @@ import (
 	"github.com/kayiik/compa/web/backend/launcherconfig"
 )
 
-// pausedChannelRoutes register the routes of paused channels (the WeChat and
-// WeCom QR logins); the files built with the paused_channels tag add them.
-var pausedChannelRoutes []func(*Handler, *http.ServeMux)
-
 // Handler serves HTTP API requests.
 type Handler struct {
 	configPath                 string
@@ -146,11 +142,6 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 
 	// WhatsApp QR linking
 	h.registerWhatsAppRoutes(mux)
-
-	// The QR logins of paused channels, in builds that include them
-	for _, register := range pausedChannelRoutes {
-		register(h, mux)
-	}
 }
 
 // Shutdown gracefully shuts down the handler, stopping the gateway if it was started by this handler.

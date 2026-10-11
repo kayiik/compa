@@ -45,7 +45,7 @@ func TestAgentConfig_FullParse(t *testing.T) {
 		"session": {
 			"dimensions": ["sender"],
 			"identity_links": {
-				"john": ["telegram:123", "discord:john#1234"]
+				"john": ["slack:U123", "whatsapp:15550001234"]
 			}
 		}
 	}`
@@ -611,7 +611,7 @@ func TestAgentConfig_ParsesDispatchRules(t *testing.T) {
 						"name": "support-vip",
 						"agent": "support",
 						"when": {
-							"channel": "telegram",
+							"channel": "slack",
 							"chat": "group:-100123",
 							"sender": "12345",
 							"mentioned": true
@@ -637,7 +637,7 @@ func TestAgentConfig_ParsesDispatchRules(t *testing.T) {
 	if rule.Name != "support-vip" || rule.Agent != "support" {
 		t.Fatalf("rule = %+v", rule)
 	}
-	if rule.When.Channel != "telegram" || rule.When.Chat != "group:-100123" || rule.When.Sender != "12345" {
+	if rule.When.Channel != "slack" || rule.When.Chat != "group:-100123" || rule.When.Sender != "12345" {
 		t.Fatalf("rule.When = %+v", rule.When)
 	}
 	if rule.When.Mentioned == nil || !*rule.When.Mentioned {
@@ -740,23 +740,24 @@ func TestDefaultConfig_Channels(t *testing.T) {
 	}
 }
 
-func TestDefaultConfig_ChannelStreamingDisabled(t *testing.T) {
+// Only the web chat streams; the other default channels carry no settings.
+func TestDefaultConfig_ChannelStreaming(t *testing.T) {
 	cfg := DefaultConfig()
 
-	telegram := cfg.Channels.Get(ChannelTelegram)
-	if telegram == nil {
-		t.Fatal("DefaultConfig() missing telegram channel")
+	slack := cfg.Channels.Get(ChannelSlack)
+	if slack == nil {
+		t.Fatal("DefaultConfig() missing slack channel")
 	}
-	decoded, err := telegram.GetDecoded()
+	decoded, err := slack.GetDecoded()
 	if err != nil {
-		t.Fatalf("telegram GetDecoded() error = %v", err)
+		t.Fatalf("slack GetDecoded() error = %v", err)
 	}
-	settings, ok := decoded.(*TelegramSettings)
+	slackSettings, ok := decoded.(*SlackSettings)
 	if !ok {
-		t.Fatalf("telegram settings type = %T, want *TelegramSettings", decoded)
+		t.Fatalf("slack settings type = %T, want *SlackSettings", decoded)
 	}
-	if settings.Streaming.Enabled {
-		t.Fatal("DefaultConfig().telegram.settings.streaming.enabled should be false")
+	if slackSettings.BotToken.String() != "" || slackSettings.AppToken.String() != "" {
+		t.Fatal("DefaultConfig().slack.settings should hold no tokens")
 	}
 
 	web := cfg.Channels.Get(ChannelWeb)
@@ -775,36 +776,6 @@ func TestDefaultConfig_ChannelStreamingDisabled(t *testing.T) {
 		t.Fatal("DefaultConfig().web.settings.streaming.enabled should be true")
 	}
 }
-
-func TestDefaultConfig_DeltaChatExample(t *testing.T) {
-	cfg := DefaultConfig()
-
-	deltachat := cfg.Channels.Get(ChannelDeltaChat)
-	if deltachat == nil {
-		t.Fatal("DefaultConfig() missing deltachat channel")
-	}
-	if deltachat.Enabled {
-		t.Fatal("DefaultConfig().deltachat should be disabled")
-	}
-	decoded, err := deltachat.GetDecoded()
-	if err != nil {
-		t.Fatalf("deltachat GetDecoded() error = %v", err)
-	}
-	settings, ok := decoded.(*DeltaChatSettings)
-	if !ok {
-		t.Fatalf("deltachat settings type = %T, want *DeltaChatSettings", decoded)
-	}
-	if settings.Email != "@nine.testrun.org" {
-		t.Fatalf("DefaultConfig().deltachat.settings.email = %q, want @nine.testrun.org", settings.Email)
-	}
-	if settings.Password.String() != "" {
-		t.Fatal("DefaultConfig().deltachat.settings.password should be empty")
-	}
-	if settings.DisplayName == "" {
-		t.Fatal("DefaultConfig().deltachat.settings.display_name should be populated")
-	}
-}
-
 func TestValidateSingletonChannels_RejectsMultipleInstances(t *testing.T) {
 	channels := ChannelsConfig{
 		"web1": &Channel{Enabled: true, Type: ChannelWeb},
@@ -842,12 +813,12 @@ func TestValidateSingletonChannels_IgnoresDisabledInstances(t *testing.T) {
 
 func TestValidateSingletonChannels_AllowsMultiInstanceTypes(t *testing.T) {
 	channels := ChannelsConfig{
-		"tg1": &Channel{Enabled: true, Type: ChannelTelegram},
-		"tg2": &Channel{Enabled: true, Type: ChannelTelegram},
+		"slack1": &Channel{Enabled: true, Type: ChannelSlack},
+		"slack2": &Channel{Enabled: true, Type: ChannelSlack},
 	}
 	err := validateSingletonChannels(channels)
 	if err != nil {
-		t.Fatalf("telegram should allow multiple instances, got error: %v", err)
+		t.Fatalf("slack should allow multiple instances, got error: %v", err)
 	}
 }
 
@@ -910,16 +881,31 @@ func TestSaveConfig_IncludesEmptyModelNameField(t *testing.T) {
 	}
 }
 
-func TestSaveConfig_PreservesDisabledTelegramPlaceholder(t *testing.T) {
+func TestSaveConfig_PreservesDisabledSlackPlaceholder(t *testing.T) {
 	tmpDir := t.TempDir()
 	path := filepath.Join(tmpDir, "config.json")
 
+	// An enabled placeholder survives a round-trip first, so turning it off
+	// below is a change the round-trip must keep.
 	cfg := DefaultConfig()
-	if bc := cfg.Channels.Get("telegram"); bc != nil {
-		bc.Placeholder.Enabled = false
+	bc := cfg.Channels.Get("slack")
+	if bc == nil {
+		t.Fatal("DefaultConfig() missing slack channel")
+	}
+	bc.Placeholder = PlaceholderConfig{Enabled: true, Text: FlexibleStringSlice{"Thinking..."}}
+	if err := SaveConfig(path, cfg); err != nil {
+		t.Fatalf("SaveConfig failed: %v", err)
+	}
+	loaded, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+	if bc = loaded.Channels.Get("slack"); bc == nil || !bc.Placeholder.Enabled {
+		t.Fatal("slack placeholder should be enabled after SaveConfig/LoadConfig round-trip")
 	}
 
-	if err := SaveConfig(path, cfg); err != nil {
+	bc.Placeholder.Enabled = false
+	if err := SaveConfig(path, loaded); err != nil {
 		t.Fatalf("SaveConfig failed: %v", err)
 	}
 
@@ -927,23 +913,34 @@ func TestSaveConfig_PreservesDisabledTelegramPlaceholder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadFile failed: %v", err)
 	}
-	if !strings.Contains(string(data), `"placeholder": {`) {
-		t.Fatalf("saved config should include telegram placeholder config, got: %s", string(data))
+	var saved struct {
+		Channels map[string]struct {
+			Placeholder *PlaceholderConfig `json:"placeholder"`
+		} `json:"channel_list"`
 	}
-	if !strings.Contains(string(data), `"enabled": false`) {
+	if err := json.Unmarshal(data, &saved); err != nil {
+		t.Fatalf("Unmarshal saved config: %v", err)
+	}
+	placeholder := saved.Channels["slack"].Placeholder
+	if placeholder == nil {
+		t.Fatalf("saved config should include slack placeholder config, got: %s", string(data))
+	}
+	if placeholder.Enabled {
 		t.Fatalf("saved config should persist placeholder.enabled=false, got: %s", string(data))
 	}
+	if got := []string(placeholder.Text); len(got) != 1 || got[0] != "Thinking..." {
+		t.Fatalf("saved placeholder.text = %#v, want [\"Thinking...\"]", got)
+	}
 
-	loaded, err := LoadConfig(path)
+	loaded, err = LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig failed: %v", err)
 	}
-	bc := loaded.Channels.Get("telegram")
-	if bc != nil && bc.Placeholder.Enabled {
-		t.Fatal("telegram placeholder should remain disabled after SaveConfig/LoadConfig round-trip")
+	bc = loaded.Channels.Get("slack")
+	if bc == nil || bc.Placeholder.Enabled {
+		t.Fatal("slack placeholder should remain disabled after SaveConfig/LoadConfig round-trip")
 	}
 }
-
 func TestSaveConfig_PreservesExplicitDisabledWebStreaming(t *testing.T) {
 	tmpDir := t.TempDir()
 	path := filepath.Join(tmpDir, "config.json")
@@ -1375,7 +1372,7 @@ func TestLoadConfig_CronCommandAllowedRemotes(t *testing.T) {
 	configPath := filepath.Join(dir, "config.json")
 	if err := os.WriteFile(
 		configPath,
-		[]byte(`{"tools":{"cron":{"command_allowed_remotes":["telegram:1234567890","discord"]}}}`),
+		[]byte(`{"tools":{"cron":{"command_allowed_remotes":["slack:U1234567890","whatsapp"]}}}`),
 		0o600,
 	); err != nil {
 		t.Fatalf("WriteFile() error: %v", err)
@@ -1385,7 +1382,7 @@ func TestLoadConfig_CronCommandAllowedRemotes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadConfig() error: %v", err)
 	}
-	want := []string{"telegram:1234567890", "discord"}
+	want := []string{"slack:U1234567890", "whatsapp"}
 	if len(cfg.Tools.Cron.CommandAllowedRemotes) != len(want) {
 		t.Fatalf("CommandAllowedRemotes = %#v, want %#v", cfg.Tools.Cron.CommandAllowedRemotes, want)
 	}
@@ -1926,14 +1923,14 @@ func TestFlexibleStringSlice_UnmarshalJSON(t *testing.T) {
 	}
 }
 
-func TestLoadConfig_TelegramPlaceholderTextAcceptsSingleString(t *testing.T) {
+func TestLoadConfig_PlaceholderTextAcceptsSingleString(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.json")
 	data := `{
 		"agents": { "defaults": { "workspace": "", "model_name": "", "max_tokens": 0, "max_tool_iterations": 0 } },
 		"session": {},
 		"channel_list": {
-			"telegram": {
+			"slack": {
 				"enabled": true,
 				"allow_from": [],
 				"placeholder": {
@@ -1941,7 +1938,7 @@ func TestLoadConfig_TelegramPlaceholderTextAcceptsSingleString(t *testing.T) {
 					"text": "Thinking..."
 				},
 				"settings": {
-					"token": ""
+					"bot_token": ""
 				}
 			}
 		},
@@ -1959,7 +1956,7 @@ func TestLoadConfig_TelegramPlaceholderTextAcceptsSingleString(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
-	bc := cfg.Channels.Get("telegram")
+	bc := cfg.Channels.Get("slack")
 	if got := []string(bc.Placeholder.Text); len(got) != 1 || got[0] != "Thinking..." {
 		t.Fatalf("placeholder.text = %#v, want [\"Thinking...\"]", got)
 	}
@@ -2357,24 +2354,19 @@ func TestFilterSensitiveData_AllTokenTypes(t *testing.T) {
 			want:    "Using search with key [FILTERED]",
 		},
 		{
-			name:    "telegram_token",
-			content: "Telegram token: telegram-bot-token-abcdef",
-			want:    "Telegram token: [FILTERED]",
-		},
-		{
-			name:    "discord_token",
-			content: "Discord token: discord-bot-token-xyz789",
-			want:    "Discord token: [FILTERED]",
-		},
-		{
 			name:    "slack_tokens",
 			content: "Slack bot: xoxb-slack-bot-token, app: xapp-slack-app-token",
 			want:    "Slack bot: [FILTERED], app: [FILTERED]",
 		},
 		{
-			name:    "matrix_token",
-			content: "Matrix access token: matrix-access-token-abc",
-			want:    "Matrix access token: [FILTERED]",
+			name:    "web_token",
+			content: "Web token: web-token-abc123",
+			want:    "Web token: [FILTERED]",
+		},
+		{
+			name:    "web_client_token",
+			content: "Web client token: web-client-token-456",
+			want:    "Web client token: [FILTERED]",
 		},
 		{
 			name:    "brave_api_key",
@@ -2392,14 +2384,14 @@ func TestFilterSensitiveData_AllTokenTypes(t *testing.T) {
 			want:    "GitHub token: [FILTERED]",
 		},
 		{
-			name:    "irc_passwords",
-			content: "IRC password: irc-password, nickserv: nickserv-pass",
-			want:    "IRC password: [FILTERED], nickserv: [FILTERED]",
+			name:    "webhook_urls",
+			content: "Teams: https://teams.example/webhook-secret, Slack: https://hooks.slack.example/services/T0/B0/secret",
+			want:    "Teams: [FILTERED], Slack: [FILTERED]",
 		},
 		{
 			name:    "mixed_content",
-			content: "Search key kagi-api-key-12345 and Telegram token telegram-bot-token-abcdef",
-			want:    "Search key [FILTERED] and Telegram token [FILTERED]",
+			content: "Search key kagi-api-key-12345 and Slack token xoxb-slack-bot-token",
+			want:    "Search key [FILTERED] and Slack token [FILTERED]",
 		},
 		{
 			name:    "short_key_not_filtered",
@@ -2624,8 +2616,6 @@ func testChannelsConfigWithTokens() ChannelsConfig {
 		cfg  any
 	}
 	defs := []chDef{
-		{"telegram", TelegramSettings{Token: *NewSecureString("telegram-bot-token-abcdef")}},
-		{"discord", DiscordSettings{Token: *NewSecureString("discord-bot-token-xyz789")}},
 		{
 			"slack",
 			SlackSettings{
@@ -2633,25 +2623,19 @@ func testChannelsConfigWithTokens() ChannelsConfig {
 				AppToken: *NewSecureString("xapp-slack-app-token"),
 			},
 		},
-		{"matrix", MatrixSettings{AccessToken: *NewSecureString("matrix-access-token-abc")}},
-		{
-			"feishu",
-			FeishuSettings{
-				AppSecret:  *NewSecureString("feishu-app-secret-123"),
-				EncryptKey: *NewSecureString("feishu-encrypt-key"),
-			},
-		},
-		{"dingtalk", DingTalkSettings{ClientSecret: *NewSecureString("dingtalk-client-secret")}},
-		{"onebot", OneBotSettings{AccessToken: *NewSecureString("onebot-access-token")}},
-		{"wecom", WeComSettings{Secret: *NewSecureString("wecom-secret")}},
 		{"web", WebChatSettings{Token: *NewSecureString("web-token-abc123")}},
+		{"web_client", WebChatClientSettings{Token: *NewSecureString("web-client-token-456")}},
 		{
-			"irc",
-			IRCSettings{
-				Password:         *NewSecureString("irc-password"),
-				NickServPassword: *NewSecureString("nickserv-pass"),
-				SASLPassword:     *NewSecureString("sasl-pass"),
-			},
+			"teams_webhook",
+			TeamsWebhookSettings{Webhooks: map[string]TeamsWebhookTarget{
+				"ops": {WebhookURL: *NewSecureString("https://teams.example/webhook-secret")},
+			}},
+		},
+		{
+			"slack_webhook",
+			SlackWebhookSettings{Webhooks: map[string]SlackWebhookTarget{
+				"alerts": {WebhookURL: *NewSecureString("https://hooks.slack.example/services/T0/B0/secret")},
+			}},
 		},
 	}
 	for _, def := range defs {

@@ -7,11 +7,6 @@
 # once it is fixed.
 version: "2"
 
-run:
-  build-tags:
-    - goolm
-    - stdjson
-
 linters:
   default: none
   enable:

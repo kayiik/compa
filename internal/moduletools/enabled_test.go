@@ -182,7 +182,7 @@ func installFakeModule(t *testing.T, home string) string {
 		name += ".exe"
 	}
 	bin := filepath.Join(dir, name)
-	cmd := exec.Command("go", "build", "-tags", "goolm,stdjson", "-o", bin, "../../cmd/fakemodule")
+	cmd := exec.Command("go", "build", "-o", bin, "../../cmd/fakemodule")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Skipf("cannot build the fake module here: %v: %s", err, out)
 	}

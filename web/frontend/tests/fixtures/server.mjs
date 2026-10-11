@@ -43,7 +43,7 @@ createServer(async (req, res) => {
   if (pathname === "/api/channels/catalog")
     return json(res, {
       channels: [
-        { name: "telegram", config_key: "telegram" },
+        { name: "slack", config_key: "slack" },
         { name: "web", config_key: "web" },
       ],
     })

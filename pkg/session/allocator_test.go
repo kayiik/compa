@@ -11,7 +11,7 @@ func TestAllocateRouteSession_PerPeerDM(t *testing.T) {
 	allocation := AllocateRouteSession(AllocationInput{
 		AgentID: "main",
 		Context: bus.InboundContext{
-			Channel:  "telegram",
+			Channel:  "whatsapp",
 			Account:  "default",
 			ChatID:   "dm-123",
 			ChatType: "direct",
@@ -59,45 +59,6 @@ func TestAllocateRouteSession_GroupPeer(t *testing.T) {
 	}
 	if allocation.Scope.Values["chat"] != "channel:c001" {
 		t.Fatalf("Scope.Values[chat] = %q, want channel:c001", allocation.Scope.Values["chat"])
-	}
-}
-
-func TestAllocateRouteSession_TelegramForumTopicsRemainIsolatedByDefault(t *testing.T) {
-	first := AllocateRouteSession(AllocationInput{
-		AgentID: "main",
-		Context: bus.InboundContext{
-			Channel:  "telegram",
-			ChatID:   "-1001234567890",
-			ChatType: "group",
-			TopicID:  "42",
-			SenderID: "7",
-		},
-		SessionPolicy: routing.SessionPolicy{
-			Dimensions: []string{"chat"},
-		},
-	})
-	second := AllocateRouteSession(AllocationInput{
-		AgentID: "main",
-		Context: bus.InboundContext{
-			Channel:  "telegram",
-			ChatID:   "-1001234567890",
-			ChatType: "group",
-			TopicID:  "99",
-			SenderID: "7",
-		},
-		SessionPolicy: routing.SessionPolicy{
-			Dimensions: []string{"chat"},
-		},
-	})
-
-	if first.SessionKey == second.SessionKey {
-		t.Fatalf("forum topics should not share default session key: %q", first.SessionKey)
-	}
-	if got := first.Scope.Values["chat"]; got != "group:-1001234567890/42" {
-		t.Fatalf("first.Scope.Values[chat] = %q, want %q", got, "group:-1001234567890/42")
-	}
-	if got := second.Scope.Values["chat"]; got != "group:-1001234567890/99" {
-		t.Fatalf("second.Scope.Values[chat] = %q, want %q", got, "group:-1001234567890/99")
 	}
 }
 

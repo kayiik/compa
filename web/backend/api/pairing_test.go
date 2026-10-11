@@ -13,15 +13,15 @@ import (
 	"github.com/kayiik/compa/pkg/pairing"
 )
 
-// pairingTestHandler saves a config whose telegram and whatsapp channels
-// have the given allow_from, in a fresh Compa home.
+// pairingTestHandler saves a config whose whatsapp channel
+// has the given allow_from, in a fresh Compa home.
 func pairingTestHandler(t *testing.T, allowFrom ...string) (*Handler, *http.ServeMux, string) {
 	t.Helper()
 	home := t.TempDir()
 	t.Setenv(config.EnvHome, home)
 	configPath := filepath.Join(home, "config.json")
 	cfg := config.DefaultConfig()
-	cfg.Channels.Get("telegram").AllowFrom = append(config.FlexibleStringSlice(nil), allowFrom...)
+	cfg.Channels.Get("whatsapp").AllowFrom = append(config.FlexibleStringSlice(nil), allowFrom...)
 	if err := config.SaveConfig(configPath, cfg); err != nil {
 		t.Fatalf("SaveConfig() error = %v", err)
 	}
@@ -58,16 +58,16 @@ func TestPairingListReturnsRequestsNewestFirst(t *testing.T) {
 	older := time.Now().Add(-20 * time.Minute).UTC().Truncate(time.Second)
 	newer := time.Now().Add(-10 * time.Minute).UTC().Truncate(time.Second)
 	recordPairingRequest(t, home, pairing.Request{
-		Channel: "telegram", SenderID: "telegram:1", PlatformID: "1", DisplayName: "Bo",
+		Channel: "whatsapp", SenderID: "whatsapp:1", PlatformID: "1", DisplayName: "Bo",
 		FirstSeen: older, LastSeen: older,
 	})
 	recordPairingRequest(t, home, pairing.Request{
-		Channel: "telegram", SenderID: "telegram:2", PlatformID: "2", DisplayName: "Ana",
+		Channel: "whatsapp", SenderID: "whatsapp:2", PlatformID: "2", DisplayName: "Ana",
 		FirstSeen: older, LastSeen: newer, Count: 2,
 	})
-	recordPairingRequest(t, home, pairing.Request{Channel: "discord", SenderID: "discord:9"})
+	recordPairingRequest(t, home, pairing.Request{Channel: "slack", SenderID: "slack:9"})
 
-	rec := pairingRequestJSON(t, mux, http.MethodGet, "/api/channels/telegram/pairing", "")
+	rec := pairingRequestJSON(t, mux, http.MethodGet, "/api/channels/whatsapp/pairing", "")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
 	}
@@ -78,17 +78,17 @@ func TestPairingListReturnsRequestsNewestFirst(t *testing.T) {
 		t.Fatalf("unmarshal: %v", err)
 	}
 	if len(body.Requests) != 2 {
-		t.Fatalf("requests = %+v, want the two telegram requests", body.Requests)
+		t.Fatalf("requests = %+v, want the two whatsapp requests", body.Requests)
 	}
 	want := pairingRequestView{
-		SenderID: "telegram:2", PlatformID: "2", DisplayName: "Ana",
+		SenderID: "whatsapp:2", PlatformID: "2", DisplayName: "Ana",
 		FirstSeen: older.Format(time.RFC3339), LastSeen: newer.Format(time.RFC3339), Count: 2,
 	}
 	if body.Requests[0] != want {
 		t.Fatalf("first request = %+v, want %+v", body.Requests[0], want)
 	}
-	if body.Requests[1].SenderID != "telegram:1" {
-		t.Fatalf("second request = %+v, want telegram:1", body.Requests[1])
+	if body.Requests[1].SenderID != "whatsapp:1" {
+		t.Fatalf("second request = %+v, want whatsapp:1", body.Requests[1])
 	}
 }
 
@@ -125,11 +125,11 @@ func TestPairingUnknownChannelIsNotFound(t *testing.T) {
 // allow_from ("*" goes), and the channel's other requests are dropped.
 func TestPairingApproveBindsTheOwnerAndDropsTheOtherRequests(t *testing.T) {
 	h, mux, home := pairingTestHandler(t, "*")
-	recordPairingRequest(t, home, pairing.Request{Channel: "telegram", SenderID: "telegram:123", PlatformID: "123"})
-	recordPairingRequest(t, home, pairing.Request{Channel: "telegram", SenderID: "telegram:456"})
+	recordPairingRequest(t, home, pairing.Request{Channel: "whatsapp", SenderID: "whatsapp:123", PlatformID: "123"})
+	recordPairingRequest(t, home, pairing.Request{Channel: "whatsapp", SenderID: "whatsapp:456"})
 	recordPairingRequest(t, home, pairing.Request{Channel: "slack", SenderID: "slack:U1"})
 
-	rec := pairingRequestJSON(t, mux, http.MethodPost, "/api/channels/telegram/pairing/approve", `{"sender_id":" telegram:123 "}`)
+	rec := pairingRequestJSON(t, mux, http.MethodPost, "/api/channels/whatsapp/pairing/approve", `{"sender_id":" whatsapp:123 "}`)
 	if rec.Code != http.StatusOK || strings.TrimSpace(rec.Body.String()) != `{"status":"ok"}` {
 		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
 	}
@@ -138,10 +138,10 @@ func TestPairingApproveBindsTheOwnerAndDropsTheOtherRequests(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
-	if got := []string(cfg.Channels.Get("telegram").AllowFrom); strings.Join(got, ",") != "telegram:123" {
+	if got := []string(cfg.Channels.Get("whatsapp").AllowFrom); strings.Join(got, ",") != "whatsapp:123" {
 		t.Fatalf("allow_from = %v, want only the approved sender", got)
 	}
-	if requests, _ := pairing.List(home, "telegram"); len(requests) != 0 {
+	if requests, _ := pairing.List(home, "whatsapp"); len(requests) != 0 {
 		t.Fatalf("pending = %+v, want none", requests)
 	}
 	if requests, _ := pairing.List(home, "slack"); len(requests) != 1 {
@@ -151,10 +151,10 @@ func TestPairingApproveBindsTheOwnerAndDropsTheOtherRequests(t *testing.T) {
 
 // Once allow_from lists an account, approving another is refused.
 func TestPairingApproveRefusesOnceTheOwnerIsBound(t *testing.T) {
-	h, mux, home := pairingTestHandler(t, "telegram:1")
-	recordPairingRequest(t, home, pairing.Request{Channel: "telegram", SenderID: "telegram:123"})
+	h, mux, home := pairingTestHandler(t, "whatsapp:1")
+	recordPairingRequest(t, home, pairing.Request{Channel: "whatsapp", SenderID: "whatsapp:123"})
 
-	rec := pairingRequestJSON(t, mux, http.MethodPost, "/api/channels/telegram/pairing/approve", `{"sender_id":"telegram:123"}`)
+	rec := pairingRequestJSON(t, mux, http.MethodPost, "/api/channels/whatsapp/pairing/approve", `{"sender_id":"whatsapp:123"}`)
 	if rec.Code != http.StatusConflict {
 		t.Fatalf("status = %d, body = %s, want 409", rec.Code, rec.Body.String())
 	}
@@ -162,15 +162,15 @@ func TestPairingApproveRefusesOnceTheOwnerIsBound(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
-	if got := []string(cfg.Channels.Get("telegram").AllowFrom); strings.Join(got, ",") != "telegram:1" {
+	if got := []string(cfg.Channels.Get("whatsapp").AllowFrom); strings.Join(got, ",") != "whatsapp:1" {
 		t.Fatalf("allow_from = %v, want it unchanged", got)
 	}
 }
 func TestPairingApproveDoesNotDuplicateAnAllowedSender(t *testing.T) {
-	h, mux, home := pairingTestHandler(t, "telegram:123")
-	recordPairingRequest(t, home, pairing.Request{Channel: "telegram", SenderID: "telegram:123"})
+	h, mux, home := pairingTestHandler(t, "whatsapp:123")
+	recordPairingRequest(t, home, pairing.Request{Channel: "whatsapp", SenderID: "whatsapp:123"})
 
-	rec := pairingRequestJSON(t, mux, http.MethodPost, "/api/channels/telegram/pairing/approve", `{"sender_id":"telegram:123"}`)
+	rec := pairingRequestJSON(t, mux, http.MethodPost, "/api/channels/whatsapp/pairing/approve", `{"sender_id":"whatsapp:123"}`)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
 	}
@@ -178,17 +178,17 @@ func TestPairingApproveDoesNotDuplicateAnAllowedSender(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
-	if got := []string(cfg.Channels.Get("telegram").AllowFrom); len(got) != 1 {
+	if got := []string(cfg.Channels.Get("whatsapp").AllowFrom); len(got) != 1 {
 		t.Fatalf("allow_from = %v, want the sender once", got)
 	}
-	if requests, _ := pairing.List(home, "telegram"); len(requests) != 0 {
+	if requests, _ := pairing.List(home, "whatsapp"); len(requests) != 0 {
 		t.Fatalf("pending = %+v, want none", requests)
 	}
 }
 
 func TestPairingApproveWithoutARequestIsNotFound(t *testing.T) {
 	h, mux, _ := pairingTestHandler(t)
-	rec := pairingRequestJSON(t, mux, http.MethodPost, "/api/channels/telegram/pairing/approve", `{"sender_id":"telegram:999"}`)
+	rec := pairingRequestJSON(t, mux, http.MethodPost, "/api/channels/whatsapp/pairing/approve", `{"sender_id":"whatsapp:999"}`)
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want 404", rec.Code)
 	}
@@ -196,7 +196,7 @@ func TestPairingApproveWithoutARequestIsNotFound(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
-	if got := cfg.Channels.Get("telegram").AllowFrom; len(got) != 0 {
+	if got := cfg.Channels.Get("whatsapp").AllowFrom; len(got) != 0 {
 		t.Fatalf("allow_from = %v, want it unchanged", got)
 	}
 }
@@ -204,7 +204,7 @@ func TestPairingApproveWithoutARequestIsNotFound(t *testing.T) {
 func TestPairingDecisionNeedsASenderID(t *testing.T) {
 	_, mux, _ := pairingTestHandler(t)
 	for _, body := range []string{`{}`, `{"sender_id":"  "}`, `not json`} {
-		rec := pairingRequestJSON(t, mux, http.MethodPost, "/api/channels/telegram/pairing/deny", body)
+		rec := pairingRequestJSON(t, mux, http.MethodPost, "/api/channels/whatsapp/pairing/deny", body)
 		if rec.Code != http.StatusBadRequest {
 			t.Fatalf("body %q: status = %d, want 400", body, rec.Code)
 		}
@@ -217,20 +217,20 @@ func TestPairingDecisionNeedsASenderID(t *testing.T) {
 
 func TestPairingDenyRemovesTheRequestOnly(t *testing.T) {
 	h, mux, home := pairingTestHandler(t)
-	recordPairingRequest(t, home, pairing.Request{Channel: "telegram", SenderID: "telegram:123"})
+	recordPairingRequest(t, home, pairing.Request{Channel: "whatsapp", SenderID: "whatsapp:123"})
 
-	rec := pairingRequestJSON(t, mux, http.MethodPost, "/api/channels/telegram/pairing/deny", `{"sender_id":"telegram:123"}`)
+	rec := pairingRequestJSON(t, mux, http.MethodPost, "/api/channels/whatsapp/pairing/deny", `{"sender_id":"whatsapp:123"}`)
 	if rec.Code != http.StatusOK || strings.TrimSpace(rec.Body.String()) != `{"status":"ok"}` {
 		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
 	}
-	if requests, _ := pairing.List(home, "telegram"); len(requests) != 0 {
+	if requests, _ := pairing.List(home, "whatsapp"); len(requests) != 0 {
 		t.Fatalf("pending = %+v, want none", requests)
 	}
 	cfg, err := config.LoadConfig(h.configPath)
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
-	if got := cfg.Channels.Get("telegram").AllowFrom; len(got) != 0 {
+	if got := cfg.Channels.Get("whatsapp").AllowFrom; len(got) != 0 {
 		t.Fatalf("allow_from = %v, want the denied sender left out", got)
 	}
 }

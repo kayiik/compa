@@ -25,8 +25,7 @@ import (
 func TestTheShellDoesNotLinkTheAgentKernel(t *testing.T) {
 	const kernel = "github.com/kayiik/compa/pkg/agent"
 
-	out, err := exec.Command("go", "list", "-deps",
-		"-tags", "goolm,stdjson", ".").Output()
+	out, err := exec.Command("go", "list", "-deps", ".").Output()
 	if err != nil {
 		// A failure to MEASURE is not a passing architecture. Skipping here
 		// would report "no edge found" for a command that never ran -- the

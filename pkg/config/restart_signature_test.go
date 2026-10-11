@@ -8,14 +8,14 @@ import (
 // Signatures have the same digest exactly when they are Equal, secrets
 // included; an empty one has none.
 func TestRestartSignatureDigest(t *testing.T) {
-	signature := RestartSignature{"models": "default=x", "channel:telegram": `{"token":"secret-1"}`}
+	signature := RestartSignature{"models": "default=x", "channel:slack": `{"bot_token":"secret-1"}`}
 	if signature.Digest() == "" || signature.Digest() != maps.Clone(signature).Digest() {
 		t.Fatalf("equal signatures: digests %q and %q", signature.Digest(), maps.Clone(signature).Digest())
 	}
 	for name, other := range map[string]RestartSignature{
-		"another secret":         {"models": "default=x", "channel:telegram": `{"token":"secret-2"}`},
+		"another secret":         {"models": "default=x", "channel:slack": `{"bot_token":"secret-2"}`},
 		"a key less":             {"models": "default=x"},
-		"text moved across keys": {"models": "default=x", "channel:telegra": `m{"token":"secret-1"}`},
+		"text moved across keys": {"models": "default=x", "channel:slac": `k{"bot_token":"secret-1"}`},
 	} {
 		if other.Digest() == signature.Digest() {
 			t.Errorf("%s: same digest", name)

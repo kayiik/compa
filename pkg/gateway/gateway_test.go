@@ -212,6 +212,7 @@ func TestCollectGatewayStartupStatusHandlesMalformedInfo(t *testing.T) {
 }
 
 func TestPublishGatewayEvent(t *testing.T) {
+	t.Setenv(config.EnvHome, t.TempDir())
 	eventBus := runtimeevents.NewBus()
 	t.Cleanup(func() {
 		if err := eventBus.Close(); err != nil {
@@ -264,6 +265,7 @@ func TestPublishGatewayEvent(t *testing.T) {
 }
 
 func TestShutdownGatewayClosesMessageBus(t *testing.T) {
+	t.Setenv(config.EnvHome, t.TempDir())
 	msgBus := bus.NewMessageBus()
 	al := agent.NewAgentLoop(
 		config.DefaultConfig(),

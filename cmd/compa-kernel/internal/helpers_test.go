@@ -17,6 +17,7 @@ func TestGetConfigPath(t *testing.T) {
 	// HOME isolated nothing and the test read the developer's real home. The
 	// sibling test below already used config.EnvHome, which works everywhere.
 	home := t.TempDir()
+	t.Setenv(config.EnvHome, "")
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 
@@ -53,6 +54,7 @@ func TestGetConfigPath_Windows(t *testing.T) {
 	}
 
 	testUserProfilePath := `C:\Users\Test`
+	t.Setenv(config.EnvHome, "")
 	t.Setenv("USERPROFILE", testUserProfilePath)
 
 	got := GetConfigPath()
