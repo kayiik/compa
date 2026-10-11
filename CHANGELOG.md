@@ -3,6 +3,20 @@
 Notable changes to Compa, newest first. Versions follow
 [Semantic Versioning](https://semver.org/).
 
+## 0.0.2 - 2026-10-11
+
+### Added
+
+- Each release publishes the container image `ghcr.io/kayiik/compa`, for
+  linux/amd64 and linux/arm64. See
+  [Run in a container](docs/install.md#run-in-a-container).
+
+### Removed
+
+- The chat apps that were never built: Telegram, Discord, Feishu, WeChat,
+  WeCom, DingTalk, Matrix, Delta Chat, LINE, OneBot, QQ, IRC, VK, MaixCam and
+  MQTT. A config that lists them still loads; their entries are dropped.
+
 ## 0.0.1 - 2026-10-09
 
 First release.
