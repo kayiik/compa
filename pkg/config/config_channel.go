@@ -515,8 +515,13 @@ func (c *ChannelsConfig) UnmarshalJSON(data []byte) error {
 		if err := json.Unmarshal(entry, bc); err != nil {
 			return err
 		}
-		if t := bc.Type; retiredChannelTypes[t] || t == "" && retiredChannelTypes[name] {
-			// Removed: the config the entry came from loads without it.
+		t := bc.Type
+		if t == "" {
+			t = name
+		}
+		if retiredChannelTypes[t] && !isValidChannelType(t) {
+			// Removed: the config the entry came from loads without it,
+			// unless a channel registered from outside took the type over.
 			delete(*c, name)
 			continue
 		}

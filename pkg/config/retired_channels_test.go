@@ -98,3 +98,26 @@ func TestSecretsOfAMissingChannelAreNotCopied(t *testing.T) {
 		t.Fatalf("config.json holds a secret:\n%s", data)
 	}
 }
+
+// A channel registered from outside under a retired type name keeps its
+// entry.
+func TestARegisteredTypeIsNotRetired(t *testing.T) {
+	type customSettings struct {
+		Room string `json:"room"`
+	}
+	RegisterChannelSettings("irc", customSettings{})
+	t.Cleanup(func() {
+		channelSettingsMu.Lock()
+		delete(channelSettingsFactory, "irc")
+		channelSettingsMu.Unlock()
+	})
+
+	path := writeConfigFile(t, `{"channel_list": {"irc": {"enabled": true, "type": "irc", "settings": {"room": "x"}}}}`)
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if bc := cfg.Channels["irc"]; bc == nil || !bc.Enabled {
+		t.Fatalf("the registered channel was dropped: %+v", bc)
+	}
+}
