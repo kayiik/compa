@@ -40,7 +40,7 @@ func TestMain(m *testing.M) {
 	if runtime.GOOS == "windows" {
 		fakeModuleBinary += ".exe"
 	}
-	cmd := exec.Command("go", "build", "-tags", "goolm,stdjson", "-o", fakeModuleBinary, "../../cmd/fakemodule")
+	cmd := exec.Command("go", "build", "-o", fakeModuleBinary, "../../cmd/fakemodule")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		fmt.Fprintf(os.Stderr, "build fakemodule: %v\n%s", err, out)
 		os.RemoveAll(dir)

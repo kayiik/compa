@@ -20,27 +20,23 @@ import (
 const (
 	ChannelWeb            = "web"
 	ChannelWebClient      = "web_client"
-	ChannelTelegram       = "telegram"
-	ChannelDiscord        = "discord"
-	ChannelFeishu         = "feishu"
-	ChannelWeixin         = "weixin"
-	ChannelWeCom          = "wecom"
-	ChannelDingTalk       = "dingtalk"
 	ChannelSlack          = "slack"
-	ChannelMatrix         = "matrix"
-	ChannelDeltaChat      = "deltachat"
-	ChannelLINE           = "line"
-	ChannelOneBot         = "onebot"
-	ChannelQQ             = "qq"
-	ChannelIRC            = "irc"
-	ChannelVK             = "vk"
-	ChannelMaixCam        = "maixcam"
 	ChannelWhatsApp       = "whatsapp"
 	ChannelWhatsAppNative = "whatsapp_native"
 	ChannelTeamsWebHook   = "teams_webhook"
-	ChannelMQTT           = "mqtt"
 	ChannelSlackWebHook   = "slack_webhook"
 )
+
+// retiredChannelTypes are the types of the chat apps Compa no longer has. A
+// config written by an earlier version, which holds disabled entries of
+// these types, still loads: decoding drops them, so they are not written
+// back, and their secrets leave .security.yml with them.
+var retiredChannelTypes = map[string]bool{
+	"telegram": true, "discord": true, "feishu": true, "weixin": true,
+	"wecom": true, "dingtalk": true, "matrix": true, "deltachat": true,
+	"line": true, "onebot": true, "qq": true, "irc": true, "vk": true,
+	"maixcam": true, "mqtt": true,
+}
 
 func initChannel() {
 	registerSingletonChannel(ChannelWeb)
@@ -217,8 +213,8 @@ func (r *RawNode) IsEmpty() bool {
 // MarshalYAML outputs only secure fields (for .security.yml).
 //
 // Standard Go JSON/YAML unmarshaling handles nested format correctly:
-//   - JSON: {"enabled": true, "type": "telegram", "settings": {"base_url": "..."}}
-//   - YAML: settings: {token: xxx}  (for .security.yml)
+//   - JSON: {"enabled": true, "type": "slack", "settings": {...}}
+//   - YAML: settings: {bot_token: xxx}  (for .security.yml)
 //
 //nolint:recvcheck
 type Channel struct {
@@ -481,24 +477,18 @@ func (c *ChannelsConfig) UnmarshalYAML(value *yaml.Node) error {
 		node := value.Content[i+1]
 
 		existingBC := (*c)[name]
-		if existingBC != nil {
-			// Channel already exists - call UnmarshalYAML on it
-			// This merges security.yml settings into existing config
-			if err := existingBC.UnmarshalYAML(node); err != nil {
-				return err
-			}
-			// Ensure name is set (may have been empty before)
-			existingBC.SetName(name)
-		} else {
-			// New channel - create and unmarshal
-			newBC := &Channel{}
-			if err := node.Decode(newBC); err != nil {
-				return err
-			}
-			// Set the channel name from the map key
-			newBC.SetName(name)
-			(*c)[name] = newBC
+		if existingBC == nil {
+			// .security.yml holds only secrets, so a channel the config does
+			// not have, such as a removed one, has nothing to attach them to.
+			// Kept, they would be written to config.json as plain text.
+			continue
 		}
+		// Merge the security.yml settings into the existing config.
+		if err := existingBC.UnmarshalYAML(node); err != nil {
+			return err
+		}
+		// Ensure name is set (may have been empty before)
+		existingBC.SetName(name)
 	}
 
 	return nil
@@ -524,6 +514,11 @@ func (c *ChannelsConfig) UnmarshalJSON(data []byte) error {
 		bc := &Channel{}
 		if err := json.Unmarshal(entry, bc); err != nil {
 			return err
+		}
+		if t := bc.Type; retiredChannelTypes[t] || t == "" && retiredChannelTypes[name] {
+			// Removed: the config the entry came from loads without it.
+			delete(*c, name)
+			continue
 		}
 		bc.DMPolicy, bc.GroupPolicy, bc.GroupTrigger = "", "", GroupTriggerConfig{}
 		bc.SetName(name)
@@ -710,25 +705,10 @@ var channelSettingsMu sync.RWMutex
 var channelSettingsFactory = map[string]any{
 	ChannelWeb:            (WebChatSettings{}),
 	ChannelWebClient:      (WebChatClientSettings{}),
-	ChannelTelegram:       (TelegramSettings{}),
-	ChannelDiscord:        (DiscordSettings{}),
-	ChannelFeishu:         (FeishuSettings{}),
-	ChannelWeixin:         (WeixinSettings{}),
-	ChannelWeCom:          (WeComSettings{}),
-	ChannelDingTalk:       (DingTalkSettings{}),
 	ChannelSlack:          (SlackSettings{}),
-	ChannelMatrix:         (MatrixSettings{}),
-	ChannelDeltaChat:      (DeltaChatSettings{}),
-	ChannelLINE:           (LINESettings{}),
-	ChannelOneBot:         (OneBotSettings{}),
-	ChannelQQ:             (QQSettings{}),
-	ChannelIRC:            (IRCSettings{}),
-	ChannelVK:             (VKSettings{}),
-	ChannelMaixCam:        (MaixCamSettings{}),
 	ChannelWhatsApp:       (WhatsAppSettings{}),
 	ChannelWhatsAppNative: (WhatsAppSettings{}),
 	ChannelTeamsWebHook:   (TeamsWebhookSettings{}),
-	ChannelMQTT:           (MQTTSettings{}),
 	ChannelSlackWebHook:   (SlackWebhookSettings{}),
 }
 
@@ -830,26 +810,15 @@ func initChannelList(channels ChannelsConfig, rec channelEnvRecorder) error {
 	return nil
 }
 
-// applyStreamingEnvOverrides applies the COMPA_CHANNELS_WEB_STREAMING_* and
-// COMPA_CHANNELS_TELEGRAM_STREAMING_* environment variables to the web chat's
-// and Telegram's settings. StreamingConfig is shared by several channels, so
-// it carries no env tags.
+// applyStreamingEnvOverrides applies the COMPA_CHANNELS_WEB_STREAMING_*
+// environment variables to the web chat's settings. StreamingConfig is
+// shared, so it carries no env tags.
 func applyStreamingEnvOverrides(target any) {
-	var streaming *StreamingConfig
-	var prefix string
-	switch settings := target.(type) {
-	case *WebChatSettings:
-		if settings != nil {
-			streaming, prefix = &settings.Streaming, "COMPA_CHANNELS_WEB_STREAMING_"
-		}
-	case *TelegramSettings:
-		if settings != nil {
-			streaming, prefix = &settings.Streaming, "COMPA_CHANNELS_TELEGRAM_STREAMING_"
-		}
-	}
-	if streaming == nil {
+	settings, ok := target.(*WebChatSettings)
+	if !ok || settings == nil {
 		return
 	}
+	streaming, prefix := &settings.Streaming, "COMPA_CHANNELS_WEB_STREAMING_"
 
 	if raw, ok := os.LookupEnv(prefix + "ENABLED"); ok {
 		if value, err := strconv.ParseBool(raw); err == nil {
@@ -869,17 +838,11 @@ func applyStreamingEnvOverrides(target any) {
 }
 
 func validateChannelStreamingConfig(channelName string, target any) error {
-	var streaming StreamingConfig
-	switch settings := target.(type) {
-	case *WebChatSettings:
-		streaming = settings.Streaming
-	case *TelegramSettings:
-		streaming = settings.Streaming
-	case *WeComSettings:
-		streaming = settings.Streaming
-	default:
+	settings, ok := target.(*WebChatSettings)
+	if !ok {
 		return nil
 	}
+	streaming := settings.Streaming
 
 	if streaming.ThrottleSeconds < 0 {
 		return fmt.Errorf("channel %q streaming.throttle_seconds must be >= 0", channelName)

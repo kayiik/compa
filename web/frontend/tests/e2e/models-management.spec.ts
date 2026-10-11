@@ -197,14 +197,14 @@ test("the shell names its controls and routes", async ({ page, isMobile }) => {
     "href",
     "/config/voice",
   )
-  await expect(nav.getByRole("link", { name: "Telegram" })).toHaveCount(0)
+  await expect(nav.getByRole("link", { name: "Slack" })).toHaveCount(0)
 })
 
 test("channels live on one page", async ({ page }) => {
   await page.goto("/channels")
-  await expect(page.getByRole("link", { name: /Telegram/ })).toHaveAttribute(
+  await expect(page.getByRole("link", { name: /Slack/ })).toHaveAttribute(
     "href",
-    "/channels/telegram",
+    "/channels/slack",
   )
   // The browser chat is not a chat app channel: turning it off here would
   // cut off this very chat.

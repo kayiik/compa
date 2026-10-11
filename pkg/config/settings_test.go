@@ -42,16 +42,17 @@ func TestDefaultConfigSettings(t *testing.T) {
 			t.Errorf("%s sets a retired access setting: %+v", name, ch)
 		}
 	}
-	maix, _ := cfg.Channels[ChannelMaixCam].GetDecoded()
-	if s, ok := maix.(*MaixCamSettings); !ok || s.Host != "127.0.0.1" || s.Port == 18790 {
-		t.Errorf("maixcam settings = %+v", maix)
+	web, _ := cfg.Channels[ChannelWeb].GetDecoded()
+	if s, ok := web.(*WebChatSettings); !ok || s.PingInterval != 30 || s.ReadTimeout != 60 ||
+		s.WriteTimeout != 10 || s.MaxConnections != 100 || !s.Streaming.Enabled {
+		t.Errorf("web settings = %+v", web)
 	}
 }
 
 func TestLoadConfigKeepsExplicitValues(t *testing.T) {
 	path := writeConfigFile(t, `{
   "channel_list": {
-    "telegram": {"enabled": true, "type": "telegram", "allow_from": ["42"], "settings": {}}
+    "slack": {"enabled": true, "type": "slack", "allow_from": ["42"], "settings": {}}
   },
   "tools": {"message": {"enabled": true, "targets": "any"}},
   "commands": {"owner_only": false}
@@ -60,8 +61,8 @@ func TestLoadConfigKeepsExplicitValues(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
-	if tg := cfg.Channels["telegram"]; len(tg.AllowFrom) != 1 || tg.AllowFrom[0] != "42" {
-		t.Errorf("telegram = %+v", tg)
+	if slack := cfg.Channels["slack"]; slack == nil || len(slack.AllowFrom) != 1 || slack.AllowFrom[0] != "42" {
+		t.Errorf("slack = %+v", slack)
 	}
 	if cfg.Tools.Message.Targets != MessageTargetsAny || cfg.Commands.OwnerOnly {
 		t.Errorf("explicit settings changed: targets=%q owner_only=%v", cfg.Tools.Message.Targets, cfg.Commands.OwnerOnly)
@@ -80,7 +81,7 @@ func TestLoadConfigKeepsExplicitValues(t *testing.T) {
 // config.json an earlier version wrote, whatever their values, still loads,
 // without them, and saving does not write them back.
 func TestRetiredAccessSettingsLoadAndAreDropped(t *testing.T) {
-	path := writeConfigFile(t, `{"channel_list":{"mybot":{"type":"telegram","allow_from":["42"],`+
+	path := writeConfigFile(t, `{"channel_list":{"mybot":{"type":"slack","allow_from":["42"],`+
 		`"dm_policy":"open","group_policy":"whatever","group_trigger":{"mention_only":true,"prefixes":["!"]},"settings":{}}}}`)
 	cfg, err := LoadConfig(path)
 	if err != nil {
@@ -153,7 +154,7 @@ func TestApprovalPolicyDefaultsAndRules(t *testing.T) {
 }
 
 func TestSaveConfigWritesExplicitSettings(t *testing.T) {
-	path := writeConfigFile(t, `{"channel_list":{"telegram":{"enabled":true,"type":"telegram","settings":{}}}}`)
+	path := writeConfigFile(t, `{"channel_list":{"slack":{"enabled":true,"type":"slack","settings":{}}}}`)
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
@@ -180,7 +181,7 @@ func TestSaveConfigWritesExplicitSettings(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reload: %v", err)
 	}
-	if again.Channels["telegram"] == nil || !again.Commands.OwnerOnly {
+	if again.Channels["slack"] == nil || !again.Commands.OwnerOnly {
 		t.Error("a saved config must load with the same behavior")
 	}
 }

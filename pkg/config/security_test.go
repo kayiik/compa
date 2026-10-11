@@ -106,26 +106,26 @@ func TestSaveAndLoadSecurityConfig(t *testing.T) {
 				raw  string // raw JSON with actual secure values (bypasses SecureString.MarshalJSON)
 			}
 			for _, d := range []def{
-				{"telegram", `{"enabled":true,"settings":{"token":"telegram_token"}}`},
-				{"feishu", `{"enabled":true,"settings":{"app_id":"feishu_app_id","app_secret":"feishu_app_secret"}}`},
-				{"discord", `{"enabled":true,"settings":{"token":"discord_token"}}`},
-				{"qq", `{"enabled":true,"settings":{"app_secret":"qq_app_secret"}}`},
+				{"slack", `{"enabled":true,"settings":{"bot_token":"slack_bot_token","app_token":"slack_app_token"}}`},
+				{"web", `{"enabled":true,"settings":{"token":"web_token","ping_interval":30}}`},
 				{"web_client", `{"enabled":true,"settings":{"token":"web_client_token"}}`},
+				{
+					"teams_webhook",
+					`{"enabled":true,"settings":{"webhooks":{"ops":{"title":"Ops","webhook_url":"teams_webhook_url"}}}}`,
+				},
 			} {
 				bc := &Channel{}
 				json.Unmarshal([]byte(d.raw), bc)
 				bc.Type = d.name
 				switch bc.Type {
-				case "qq":
-					bc.Decode(&QQSettings{})
-				case "telegram":
-					bc.Decode(&TelegramSettings{})
-				case "discord":
-					bc.Decode(&DiscordSettings{})
-				case "feishu":
-					bc.Decode(&FeishuSettings{})
+				case "slack":
+					bc.Decode(&SlackSettings{})
+				case "web":
+					bc.Decode(&WebChatSettings{})
 				case "web_client":
 					bc.Decode(&WebChatClientSettings{})
+				case "teams_webhook":
+					bc.Decode(&TeamsWebhookSettings{})
 				}
 				chs[d.name] = bc
 			}
@@ -146,10 +146,15 @@ func TestSaveAndLoadSecurityConfig(t *testing.T) {
 		// Set secrets show the placeholder, channel settings leave them out,
 		// and no value is shown.
 		assert.Contains(t, string(marshal), `"api_keys":"[NOT_HERE]"`)
-		for _, value := range []string{"brave_key", "key1", "telegram_token", "feishu_app_secret", "web_client_token"} {
+		for _, value := range []string{
+			"brave_key", "key1", "slack_bot_token", "slack_app_token", "web_token", "web_client_token", "teams_webhook_url",
+		} {
 			assert.NotContains(t, string(marshal), value)
 		}
 		assert.NotContains(t, string(marshal), `"token"`)
+		assert.NotContains(t, string(marshal), `"bot_token"`)
+		assert.NotContains(t, string(marshal), `"webhook_url"`)
+		assert.Contains(t, string(marshal), `"title":"Ops"`)
 
 		err = json.Unmarshal(marshal, cfg2)
 		require.NoError(t, err)
@@ -187,26 +192,29 @@ func TestSaveAndLoadSecurityConfig(t *testing.T) {
 		getSetting := func(name string) map[string]any {
 			return channels[name]["settings"].(map[string]any)
 		}
-		assert.Contains(t, getSetting("telegram")["token"], "telegram_token")
-		assert.Contains(t, getSetting("feishu")["app_secret"], "feishu_app_secret")
-		assert.Contains(t, getSetting("discord")["token"], "discord_token")
-		assert.Contains(t, getSetting("qq")["app_secret"], "qq_app_secret")
+		assert.Contains(t, getSetting("slack")["bot_token"], "slack_bot_token")
+		assert.Contains(t, getSetting("slack")["app_token"], "slack_app_token")
+		assert.Contains(t, getSetting("web")["token"], "web_token")
+		assert.NotContains(t, getSetting("web"), "ping_interval")
 		assert.Contains(t, getSetting("web_client")["token"], "web_client_token")
+		teamsOps := getSetting("teams_webhook")["webhooks"].(map[string]any)["ops"].(map[string]any)
+		assert.Equal(t, "teams_webhook_url", teamsOps["webhook_url"])
+		assert.NotContains(t, teamsOps, "title")
 
 		// Rewrite file with deterministic content for load test (use channel_list)
 		yamlOutput := `channel_list:
-  telegram:
+  slack:
     settings:
-      token: telegram_token
-  feishu:
+      bot_token: slack_bot_token
+      app_token: slack_app_token
+  web:
     settings:
-      app_secret: feishu_app_secret
-  discord:
+      token: web_token
+  teams_webhook:
     settings:
-      token: discord_token
-  qq:
-    settings:
-      app_secret: qq_app_secret
+      webhooks:
+        ops:
+          webhook_url: teams_webhook_url
   web_client:
     settings:
       token: web_client_token
@@ -242,9 +250,19 @@ skills:
 		github, ok := cfg.Tools.Skills.Registries.Get("github")
 		require.True(t, ok)
 		assert.Equal(t, "github_token", github.AuthToken.String())
-		telegram, err := cfg.Channels.Get("telegram").GetDecoded()
+		slack, err := cfg.Channels.Get("slack").GetDecoded()
 		require.NoError(t, err)
-		assert.Equal(t, "telegram_token", telegram.(*TelegramSettings).Token.String())
+		assert.Equal(t, "slack_bot_token", slack.(*SlackSettings).BotToken.String())
+		assert.Equal(t, "slack_app_token", slack.(*SlackSettings).AppToken.String())
+		web, err := cfg.Channels.Get("web").GetDecoded()
+		require.NoError(t, err)
+		assert.Equal(t, "web_token", web.(*WebChatSettings).Token.String())
+		assert.Equal(t, 30, web.(*WebChatSettings).PingInterval)
+		teams, err := cfg.Channels.Get("teams_webhook").GetDecoded()
+		require.NoError(t, err)
+		teamsOps := teams.(*TeamsWebhookSettings).Webhooks["ops"]
+		assert.Equal(t, "teams_webhook_url", teamsOps.WebhookURL.String())
+		assert.Equal(t, "Ops", teamsOps.Title)
 	})
 
 	t.Run("test for env overwrite", func(t *testing.T) {
@@ -254,30 +272,30 @@ skills:
 		// If you are using Value types in your config, also check:
 		var _ yaml.Marshaler = SecureString{}
 
-		// Set up a fresh config with a qq channel
+		// Set up a fresh config with a slack channel
 		envCfg := &Config{
 			Channels: ChannelsConfig{
-				"qq": {
+				"slack": {
 					Enabled:  true,
-					Type:     "qq",
-					Settings: RawNode(`{"enabled":true,"app_secret":"qq_app_secret"}`),
+					Type:     "slack",
+					Settings: RawNode(`{"enabled":true,"app_token":"slack_app_token"}`),
 				},
 			},
 			Tools: original.Tools,
 		}
 
-		t.Setenv("COMPA_CHANNELS_QQ_APP_SECRET", "qq_app_secret_env")
+		t.Setenv("COMPA_CHANNELS_SLACK_APP_TOKEN", "slack_app_token_env")
 		t.Setenv("COMPA_TOOLS_WEB_BRAVE_API_KEYS", "brave_key_env,abc")
 
 		require.NoError(t, env.Parse(envCfg))
 		// Channel env overrides need explicit handling since ChannelsConfig is map-based
 		require.NoError(t, InitChannelList(envCfg.Channels))
 
-		bc := envCfg.Channels.Get("qq")
+		bc := envCfg.Channels.Get("slack")
 		decoded, err := bc.GetDecoded()
 		require.NoError(t, err)
-		qqCfg := decoded.(*QQSettings)
-		assert.Equal(t, "qq_app_secret_env", qqCfg.AppSecret.raw)
+		slackCfg := decoded.(*SlackSettings)
+		assert.Equal(t, "slack_app_token_env", slackCfg.AppToken.raw)
 		assert.Equal(t, "brave_key_env", envCfg.Tools.Web.Brave.APIKeys[0].raw)
 		assert.Equal(t, "abc", envCfg.Tools.Web.Brave.APIKeys[1].raw)
 	})

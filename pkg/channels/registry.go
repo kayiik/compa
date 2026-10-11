@@ -32,9 +32,9 @@ func RegisterFactory(name string, f ChannelFactory) {
 // Usage:
 //
 //	func init() {
-//	    channels.RegisterSafeFactory(config.ChannelTelegram,
-//	        func(bc *config.Channel, c *config.TelegramSettings, b *bus.MessageBus) (channels.Channel, error) {
-//	            return NewTelegramChannel(bc, c, b)
+//	    channels.RegisterSafeFactory(config.ChannelSlack,
+//	        func(bc *config.Channel, c *config.SlackSettings, b *bus.MessageBus) (channels.Channel, error) {
+//	            return NewSlackChannel(bc, c, b)
 //	        })
 //	}
 func RegisterSafeFactory[S any](

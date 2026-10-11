@@ -286,60 +286,7 @@ func DefaultConfig() *Config {
 func defaultChannels() ChannelsConfig {
 	defs := map[string]any{
 		"whatsapp": map[string]any{},
-		"telegram": map[string]any{
-			"typing":      map[string]any{"enabled": true},
-			"placeholder": map[string]any{"enabled": true, "text": []string{"Thinking... 💭"}},
-			"settings": map[string]any{
-				"use_markdown_v2":      false,
-				"media_group_delay_ms": 500,
-			},
-		},
-		"feishu":  map[string]any{},
-		"discord": map[string]any{},
-		"maixcam": map[string]any{
-			"settings": map[string]any{"host": defaultMaixCamHost, "port": defaultMaixCamPort},
-		},
-		"qq": map[string]any{
-			"settings": map[string]any{"max_message_length": 2000},
-		},
-		"dingtalk": map[string]any{},
 		"slack":    map[string]any{},
-		"matrix": map[string]any{
-			"placeholder": map[string]any{"enabled": true, "text": []string{"Thinking... 💭"}},
-			"settings": map[string]any{
-				"homeserver":     "https://matrix.org",
-				"join_on_invite": true,
-			},
-		},
-		"deltachat": map[string]any{
-			"settings": map[string]any{
-				"email":        "@nine.testrun.org",
-				"display_name": "Compa Bot",
-			},
-		},
-		"line": map[string]any{
-			"settings": map[string]any{
-				"webhook_path": "/webhook/line",
-			},
-		},
-		"onebot": map[string]any{
-			"settings": map[string]any{
-				"ws_url":             "ws://127.0.0.1:3001",
-				"reconnect_interval": 5,
-			},
-		},
-		"wecom": map[string]any{
-			"settings": map[string]any{
-				"websocket_url":         "wss://openws.work.weixin.qq.com",
-				"send_thinking_message": true,
-			},
-		},
-		"weixin": map[string]any{
-			"settings": map[string]any{
-				"base_url":     "https://ilinkai.weixin.qq.com/",
-				"cdn_base_url": "https://novac2c.cdn.weixin.qq.com/c2c",
-			},
-		},
 		"web": map[string]any{
 			"settings": map[string]any{
 				"ping_interval":   30,
@@ -347,14 +294,6 @@ func defaultChannels() ChannelsConfig {
 				"write_timeout":   10,
 				"max_connections": 100,
 				"streaming":       map[string]any{"enabled": true},
-			},
-		},
-		"irc": map[string]any{
-			"settings": map[string]any{
-				"server":   "",
-				"tls":      true,
-				"nick":     "compa",
-				"channels": []string{},
 			},
 		},
 	}
@@ -377,9 +316,3 @@ func defaultChannels() ChannelsConfig {
 	}
 	return channels
 }
-
-// The MaixCam channel listens on this computer only, on a port of its own.
-const (
-	defaultMaixCamHost = "127.0.0.1"
-	defaultMaixCamPort = 18792
-)

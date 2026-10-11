@@ -114,41 +114,11 @@ export function GenericForm({
 
   const buildHint = (key: string): string => {
     const descriptions: Record<string, string> = {
-      ws_url: t("channels.form.desc.wsUrl"),
-      reconnect_interval: t("channels.form.desc.reconnectInterval"),
-      host: t("channels.form.desc.host"),
-      port: t("channels.form.desc.port"),
-      homeserver: t("channels.form.desc.homeserver"),
-      user_id: t("channels.form.desc.userId"),
-      device_id: t("channels.form.desc.deviceId"),
-      join_on_invite: t("channels.form.desc.joinOnInvite"),
-      app_id: t("channels.form.desc.appId"),
-      client_id: t("channels.form.desc.clientId"),
-      corp_id: t("channels.form.desc.corpId"),
-      bot_id: t("channels.form.desc.appId"),
-      websocket_url: t("channels.form.desc.wsUrl"),
-      send_thinking_message: t("channels.form.desc.genericField", {
-        field: "thinking message behavior",
-      }),
-      agent_id: t("channels.form.desc.agentId"),
-      webhook_url: t("channels.form.desc.webhookUrl"),
-      webhook_path: t("channels.form.desc.webhookPath"),
-      reply_timeout: t("channels.form.desc.replyTimeout"),
-      max_steps: t("channels.form.desc.maxSteps"),
-      welcome_message: t("channels.form.desc.welcomeMessage"),
       allow_token_query: t("channels.form.desc.allowTokenQuery"),
       ping_interval: t("channels.form.desc.pingInterval"),
       read_timeout: t("channels.form.desc.readTimeout"),
       write_timeout: t("channels.form.desc.writeTimeout"),
       max_connections: t("channels.form.desc.maxConnections"),
-      server: t("channels.form.desc.server"),
-      tls: t("channels.form.desc.tls"),
-      nick: t("channels.form.desc.nick"),
-      user: t("channels.form.desc.user"),
-      real_name: t("channels.form.desc.realName"),
-      channels: t("channels.form.desc.channels"),
-      request_caps: t("channels.form.desc.requestCaps"),
-      max_base64_file_size_mib: t("channels.form.desc.maxBase64FileSizeMiB"),
     }
     return (
       descriptions[key] ??

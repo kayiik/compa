@@ -14,7 +14,7 @@ import (
 
 // ─── Test extend structs (simplified, settings + secure in one struct) ───
 
-type testTelegramConfig struct {
+type testBotConfig struct {
 	BaseURL       string          `json:"base_url"            yaml:"-"`
 	Proxy         string          `json:"proxy"               yaml:"-"`
 	UseMarkdownV2 bool            `json:"use_markdown_v2"     yaml:"-"`
@@ -22,7 +22,7 @@ type testTelegramConfig struct {
 	Token         SecureString    `json:"token,omitzero"      yaml:"token,omitempty"`
 }
 
-type testDiscordConfig struct {
+type testKeyedConfig struct {
 	MentionOnly bool          `json:"mention_only"      yaml:"-"`
 	Token       SecureString  `json:"token,omitzero"    yaml:"token,omitempty"`
 	ApiKeys     SecureStrings `json:"api_keys,omitzero" yaml:"api_keys,omitempty"`
@@ -102,7 +102,7 @@ func TestRawNode_YAML_RoundTrip(t *testing.T) {
 func TestChannel_JSON_Unmarshal(t *testing.T) {
 	jsonData := `{
 		"enabled": true,
-		"type": "telegram",
+		"type": "test_bot",
 		"allow_from": ["user1", "user2"],
 		"reasoning_channel_id": "-100xxx",
 		"settings": {
@@ -117,13 +117,13 @@ func TestChannel_JSON_Unmarshal(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(jsonData), &ch))
 
 	assert.True(t, ch.Enabled)
-	assert.Equal(t, "telegram", ch.Type)
+	assert.Equal(t, "test_bot", ch.Type)
 	assert.Equal(t, FlexibleStringSlice{"user1", "user2"}, ch.AllowFrom)
 	assert.Equal(t, "-100xxx", ch.ReasoningChannelID)
 	assert.False(t, ch.SettingsIsEmpty())
 
 	// Decode into combined struct
-	var cfg testTelegramConfig
+	var cfg testBotConfig
 	require.NoError(t, ch.Decode(&cfg))
 	assert.Equal(t, "https://custom-api.example.com", cfg.BaseURL)
 	assert.True(t, cfg.UseMarkdownV2)
@@ -167,30 +167,6 @@ func TestWebChatSettings_StreamingConfig(t *testing.T) {
 	assert.Equal(t, 80, webCfg.Streaming.MinGrowthChars)
 }
 
-func TestWeComSettings_StreamingConfig(t *testing.T) {
-	raw := RawNode(`{
-		"bot_id": "bot-1",
-		"streaming": {
-			"enabled": true,
-			"throttle_seconds": 4,
-			"min_growth_chars": 160
-		}
-	}`)
-	ch := &Channel{
-		Type:     ChannelWeCom,
-		Enabled:  true,
-		Settings: raw,
-	}
-	ch.SetName("wecom")
-	var wecomCfg WeComSettings
-	if err := ch.Decode(&wecomCfg); err != nil {
-		t.Fatalf("Decode() error = %v", err)
-	}
-	assert.True(t, wecomCfg.Streaming.Enabled)
-	assert.Equal(t, 4, wecomCfg.Streaming.ThrottleSeconds)
-	assert.Equal(t, 160, wecomCfg.Streaming.MinGrowthChars)
-}
-
 func TestWebStreamingConfig_Defaults(t *testing.T) {
 	cfg := StreamingConfig{Enabled: true}
 	got := cfg.WithDefaults(1, 40)
@@ -208,89 +184,82 @@ func TestWebStreamingConfig_Defaults(t *testing.T) {
 	assert.Equal(t, 0, got.MinGrowthChars)
 }
 
-func TestInitChannelList_TelegramStreamingEnvOverrides(t *testing.T) {
-	t.Setenv("COMPA_CHANNELS_TELEGRAM_STREAMING_ENABLED", "true")
-	t.Setenv("COMPA_CHANNELS_TELEGRAM_STREAMING_THROTTLE_SECONDS", "3")
-	t.Setenv("COMPA_CHANNELS_TELEGRAM_STREAMING_MIN_GROWTH_CHARS", "120")
+func TestInitChannelList_WebStreamingEnvOverrides(t *testing.T) {
+	t.Setenv("COMPA_CHANNELS_WEB_STREAMING_ENABLED", "true")
+	t.Setenv("COMPA_CHANNELS_WEB_STREAMING_THROTTLE_SECONDS", "3")
+	t.Setenv("COMPA_CHANNELS_WEB_STREAMING_MIN_GROWTH_CHARS", "120")
 
 	channels := ChannelsConfig{
-		"telegram": {
-			Type:     ChannelTelegram,
-			Enabled:  true,
-			Settings: RawNode(`{"token":"telegram-token"}`),
-		},
 		"web": {
-			Type:     ChannelWeb,
+			Type:    ChannelWeb,
+			Enabled: true,
+			Settings: RawNode(
+				`{"token":"web-token","streaming":{"enabled":false,"throttle_seconds":1,"min_growth_chars":10}}`,
+			),
+		},
+		"slack": {
+			Type:     ChannelSlack,
 			Enabled:  true,
-			Settings: RawNode(`{"token":"web-token"}`),
+			Settings: RawNode(`{"bot_token":"xoxb-token"}`),
 		},
 	}
 	if err := InitChannelList(channels); err != nil {
 		t.Fatalf("InitChannelList() error = %v", err)
 	}
 
-	tgDecoded, err := channels["telegram"].GetDecoded()
-	if err != nil {
-		t.Fatalf("telegram GetDecoded() error = %v", err)
-	}
-	tgCfg := tgDecoded.(*TelegramSettings)
-	assert.True(t, tgCfg.Streaming.Enabled)
-	assert.Equal(t, 3, tgCfg.Streaming.ThrottleSeconds)
-	assert.Equal(t, 120, tgCfg.Streaming.MinGrowthChars)
-
 	webDecoded, err := channels["web"].GetDecoded()
 	if err != nil {
 		t.Fatalf("web GetDecoded() error = %v", err)
 	}
 	webCfg := webDecoded.(*WebChatSettings)
-	assert.False(t, webCfg.Streaming.Enabled)
-	assert.Equal(t, 0, webCfg.Streaming.ThrottleSeconds)
-	assert.Equal(t, 0, webCfg.Streaming.MinGrowthChars)
+	assert.True(t, webCfg.Streaming.Enabled)
+	assert.Equal(t, 3, webCfg.Streaming.ThrottleSeconds)
+	assert.Equal(t, 120, webCfg.Streaming.MinGrowthChars)
+	assert.Equal(t, "web-token", webCfg.Token.String())
+
+	slackDecoded, err := channels["slack"].GetDecoded()
+	if err != nil {
+		t.Fatalf("slack GetDecoded() error = %v", err)
+	}
+	slackCfg := slackDecoded.(*SlackSettings)
+	assert.Equal(t, "xoxb-token", slackCfg.BotToken.String())
+	assert.Equal(t, "", slackCfg.AppToken.String())
 }
 
 func TestInitChannelList_RejectsNegativeStreamingDeliveryValues(t *testing.T) {
 	tests := []struct {
-		name        string
-		channelType string
-		settings    string
+		name     string
+		settings string
+		env      map[string]string
 	}{
 		{
-			name:        "web throttle",
-			channelType: ChannelWeb,
-			settings:    `{"token":"web-token","streaming":{"enabled":true,"throttle_seconds":-1}}`,
+			name:     "web throttle",
+			settings: `{"token":"web-token","streaming":{"enabled":true,"throttle_seconds":-1}}`,
 		},
 		{
-			name:        "web growth",
-			channelType: ChannelWeb,
-			settings:    `{"token":"web-token","streaming":{"enabled":true,"min_growth_chars":-1}}`,
+			name:     "web growth",
+			settings: `{"token":"web-token","streaming":{"enabled":true,"min_growth_chars":-1}}`,
 		},
 		{
-			name:        "telegram throttle",
-			channelType: ChannelTelegram,
-			settings:    `{"token":"telegram-token","streaming":{"enabled":true,"throttle_seconds":-1}}`,
+			name:     "web throttle from env",
+			settings: `{"token":"web-token","streaming":{"enabled":true}}`,
+			env:      map[string]string{"COMPA_CHANNELS_WEB_STREAMING_THROTTLE_SECONDS": "-1"},
 		},
 		{
-			name:        "telegram growth",
-			channelType: ChannelTelegram,
-			settings:    `{"token":"telegram-token","streaming":{"enabled":true,"min_growth_chars":-1}}`,
-		},
-		{
-			name:        "wecom throttle",
-			channelType: ChannelWeCom,
-			settings:    `{"bot_id":"bot-1","streaming":{"enabled":true,"throttle_seconds":-1}}`,
-		},
-		{
-			name:        "wecom growth",
-			channelType: ChannelWeCom,
-			settings:    `{"bot_id":"bot-1","streaming":{"enabled":true,"min_growth_chars":-1}}`,
+			name:     "web growth from env",
+			settings: `{"token":"web-token","streaming":{"enabled":true}}`,
+			env:      map[string]string{"COMPA_CHANNELS_WEB_STREAMING_MIN_GROWTH_CHARS": "-1"},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			for k, v := range tt.env {
+				t.Setenv(k, v)
+			}
 			channels := ChannelsConfig{
-				tt.channelType: {
-					Type:     tt.channelType,
+				ChannelWeb: {
+					Type:     ChannelWeb,
 					Enabled:  true,
 					Settings: RawNode(tt.settings),
 				},
@@ -313,14 +282,14 @@ func TestInitChannelList_RejectsNegativeStreamingDeliveryValues(t *testing.T) {
 func TestChannel_JSON_Marshal_SecureMasked(t *testing.T) {
 	ch := Channel{
 		Enabled: true,
-		Type:    ChannelTelegram,
-		name:    "my_telegram",
+		Type:    "test_bot",
+		name:    "my_bot",
 		Settings: mustParseRawNode(
-			`{"base_url": "https://api.telegram.org", "proxy": "socks5://127.0.0.1:1080", "token": "123456:SECRET"}`,
+			`{"base_url": "https://api.example.com", "proxy": "socks5://127.0.0.1:1080", "token": "123456:SECRET"}`,
 		),
 	}
 	// Decode to register secure field names
-	var cfg testTelegramConfig
+	var cfg testBotConfig
 	require.NoError(t, ch.Decode(&cfg))
 
 	data, err := json.MarshalIndent(ch, "", "  ")
@@ -364,7 +333,7 @@ settings:
 	require.NoError(t, yaml.Unmarshal([]byte(yamlData), &ch))
 	assert.False(t, ch.SettingsIsEmpty())
 
-	var cfg testTelegramConfig
+	var cfg testBotConfig
 	require.NoError(t, ch.Decode(&cfg))
 	assert.Equal(t, "789012:XYZ-TOKEN", cfg.Token.String())
 	assert.Equal(t, "", cfg.BaseURL)
@@ -377,11 +346,11 @@ settings:
 func TestChannel_YAML_Marshal_OnlySecureFields(t *testing.T) {
 	ch := Channel{
 		Enabled:  true,
-		Type:     ChannelTelegram,
-		name:     "my_telegram",
-		Settings: mustParseRawNode(`{"base_url": "https://api.telegram.org", "token": "123456:SECRET"}`),
+		Type:     "test_bot",
+		name:     "my_bot",
+		Settings: mustParseRawNode(`{"base_url": "https://api.example.com", "token": "123456:SECRET"}`),
 	}
-	var cfg testTelegramConfig
+	var cfg testBotConfig
 	require.NoError(t, ch.Decode(&cfg))
 
 	data, err := yaml.Marshal(ch)
@@ -401,13 +370,13 @@ func TestChannel_YAML_Marshal_OnlySecureFields(t *testing.T) {
 // ═══════════════════════════════════════════════════
 
 func TestExtractSecureFieldNames(t *testing.T) {
-	t.Run("telegram extend", func(t *testing.T) {
-		names := extractSecureFieldNames(&testTelegramConfig{})
+	t.Run("bot extend", func(t *testing.T) {
+		names := extractSecureFieldNames(&testBotConfig{})
 		assert.Equal(t, map[string]struct{}{"token": {}}, names)
 	})
 
-	t.Run("discord extend", func(t *testing.T) {
-		names := extractSecureFieldNames(&testDiscordConfig{})
+	t.Run("keyed extend", func(t *testing.T) {
+		names := extractSecureFieldNames(&testKeyedConfig{})
 		assert.Equal(t, map[string]struct{}{"token": {}, "api_keys": {}}, names)
 	})
 
@@ -444,7 +413,7 @@ func TestMergeRawJSON(t *testing.T) {
 	})
 
 	t.Run("empty overlay", func(t *testing.T) {
-		base := RawNode(`{"base_url": "https://api.telegram.org"}`)
+		base := RawNode(`{"base_url": "https://api.example.com"}`)
 		merged, err := mergeRawJSON(base, nil)
 		require.NoError(t, err)
 		// mergeRawJSON normalizes JSON through unmarshal→marshal, so compare parsed values
@@ -470,7 +439,7 @@ func TestChannel_FullFlow_JSON_YAML_Merge(t *testing.T) {
 	// Step 1: Load from extend.json
 	jsonData := `{
 		"enabled": true,
-		"type": "telegram",
+		"type": "test_bot",
 		"allow_from": ["admin"],
 		"settings": {
 			"base_url": "https://custom-api.example.com",
@@ -498,7 +467,7 @@ settings:
 	// require.NoError(t, ch.MergeSecure(yamlOverlay.Settings))
 
 	// Step 4: Decode merged result
-	var cfg testTelegramConfig
+	var cfg testBotConfig
 	require.NoError(t, ch.Decode(&cfg))
 	assert.Equal(t, "https://custom-api.example.com", cfg.BaseURL)
 	assert.True(t, cfg.UseMarkdownV2)
@@ -532,19 +501,19 @@ func TestChannel_MultipleChannels(t *testing.T) {
 
 	jsonData := `{
 		"channels": {
-			"tg1": {
+			"bot1": {
 				"enabled": true,
-				"type": "telegram",
-				"settings": {"base_url": "https://api.telegram.org", "token": "[NOT_HERE]"}
+				"type": "test_bot",
+				"settings": {"base_url": "https://api.example.com", "token": "[NOT_HERE]"}
 			},
-			"tg2": {
+			"bot2": {
 				"enabled": true,
-				"type": "telegram",
+				"type": "test_bot",
 				"settings": {"base_url": "https://custom-api.example.com", "proxy": "socks5://proxy:1080", "token": "[NOT_HERE]"}
 			},
-			"discord1": {
+			"keyed1": {
 				"enabled": true,
-				"type": "discord",
+				"type": "test_keyed",
 				"settings": {"mention_only": true, "token": "[NOT_HERE]"}
 			}
 		}
@@ -558,11 +527,11 @@ func TestChannel_MultipleChannels(t *testing.T) {
 	for name, ch := range wrapper.Channels {
 		ch.SetName(name) // Set channel name
 		switch ch.Type {
-		case "telegram":
-			var tc testTelegramConfig
+		case "test_bot":
+			var tc testBotConfig
 			require.NoError(t, ch.Decode(&tc))
-		case "discord":
-			var dc testDiscordConfig
+		case "test_keyed":
+			var dc testKeyedConfig
 			require.NoError(t, ch.Decode(&dc))
 		default:
 			t.Logf("Unknown channel type: %s for channel %s", ch.Type, name)
@@ -572,36 +541,36 @@ func TestChannel_MultipleChannels(t *testing.T) {
 	// Load secrets from YAML
 	yamlData := `
 channels:
-  tg1:
+  bot1:
     settings:
       token: "TOKEN_1"
-  tg2:
+  bot2:
     settings:
       token: "TOKEN_2"
-  discord1:
+  keyed1:
     settings:
-      token: "DISCORD_TOKEN"
+      token: "KEYED_TOKEN"
 `
 	require.NoError(t, yaml.Unmarshal([]byte(yamlData), &wrapper))
 
-	// Verify first telegram
-	var tg1 testTelegramConfig
-	require.NoError(t, wrapper.Channels["tg1"].Decode(&tg1))
-	assert.Equal(t, "https://api.telegram.org", tg1.BaseURL)
-	assert.Equal(t, "TOKEN_1", tg1.Token.String())
+	// Verify first bot
+	var bot1 testBotConfig
+	require.NoError(t, wrapper.Channels["bot1"].Decode(&bot1))
+	assert.Equal(t, "https://api.example.com", bot1.BaseURL)
+	assert.Equal(t, "TOKEN_1", bot1.Token.String())
 
-	// Verify second telegram
-	var tg2 testTelegramConfig
-	require.NoError(t, wrapper.Channels["tg2"].Decode(&tg2))
-	assert.Equal(t, "https://custom-api.example.com", tg2.BaseURL)
-	assert.Equal(t, "socks5://proxy:1080", tg2.Proxy)
-	assert.Equal(t, "TOKEN_2", tg2.Token.String())
+	// Verify second bot
+	var bot2 testBotConfig
+	require.NoError(t, wrapper.Channels["bot2"].Decode(&bot2))
+	assert.Equal(t, "https://custom-api.example.com", bot2.BaseURL)
+	assert.Equal(t, "socks5://proxy:1080", bot2.Proxy)
+	assert.Equal(t, "TOKEN_2", bot2.Token.String())
 
-	// Verify discord
-	var disc testDiscordConfig
-	require.NoError(t, wrapper.Channels["discord1"].Decode(&disc))
-	assert.True(t, disc.MentionOnly)
-	assert.Equal(t, "DISCORD_TOKEN", disc.Token.String())
+	// Verify keyed channel
+	var keyed testKeyedConfig
+	require.NoError(t, wrapper.Channels["keyed1"].Decode(&keyed))
+	assert.True(t, keyed.MentionOnly)
+	assert.Equal(t, "KEYED_TOKEN", keyed.Token.String())
 
 	// Save JSON → all tokens removed
 	outJSON, err := json.MarshalIndent(wrapper, "", "  ")
@@ -609,14 +578,14 @@ channels:
 	t.Logf("Saved extend.json:\n%s", string(outJSON))
 	assert.NotContains(t, string(outJSON), "token")
 	assert.NotContains(t, string(outJSON), "TOKEN_1")
-	assert.NotContains(t, string(outJSON), "DISCORD_TOKEN")
+	assert.NotContains(t, string(outJSON), "KEYED_TOKEN")
 
 	// Save YAML → only tokens
 	outYAML, err := yaml.Marshal(wrapper)
 	require.NoError(t, err)
 	t.Logf("Saved security.yml:\n%s", string(outYAML))
 	assert.Contains(t, string(outYAML), "TOKEN_1")
-	assert.Contains(t, string(outYAML), "DISCORD_TOKEN")
+	assert.Contains(t, string(outYAML), "KEYED_TOKEN")
 	assert.NotContains(t, string(outYAML), "base_url")
 	assert.NotContains(t, string(outYAML), "NOT_HERE")
 }
@@ -630,7 +599,7 @@ func TestChannel_EmptySettings(t *testing.T) {
 	// Settings should be empty (no channel-specific fields)
 	jsonData := `{
 		"enabled": true,
-		"type": "telegram"
+		"type": "test_bot"
 	}`
 
 	var ch Channel
@@ -640,7 +609,7 @@ func TestChannel_EmptySettings(t *testing.T) {
 
 	// Decode into typed config — common fields like enabled/type are extracted,
 	// channel-specific fields should be empty
-	var cfg testTelegramConfig
+	var cfg testBotConfig
 	require.NoError(t, ch.Decode(&cfg))
 	assert.Equal(t, "", cfg.BaseURL)
 	assert.Equal(t, "", cfg.Token.String())
@@ -650,7 +619,7 @@ func TestChannel_NestedEmptySettings(t *testing.T) {
 	// Nested format with empty settings
 	jsonData := `{
 		"enabled": true,
-		"type": "telegram",
+		"type": "test_bot",
 		"settings": {}
 	}`
 
@@ -658,7 +627,7 @@ func TestChannel_NestedEmptySettings(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(jsonData), &ch))
 	assert.True(t, ch.SettingsIsEmpty())
 
-	var cfg testTelegramConfig
+	var cfg testBotConfig
 	require.NoError(t, ch.Decode(&cfg))
 	assert.Equal(t, "", cfg.BaseURL)
 	assert.Equal(t, "", cfg.Token.String())
@@ -676,9 +645,9 @@ func TestChannel_MultipleChannels_PartialYAMLMerge(t *testing.T) {
 	// JSON has 3 channels
 	jsonData := `{
 		"channels": {
-			"tg1": {"enabled": true, "type": "telegram", "settings": {"base_url": "https://api.telegram.org", "token": "[NOT_HERE]"}},
-			"tg2": {"enabled": true, "type": "telegram", "settings": {"base_url": "https://custom-api.example.com", "token": "[NOT_HERE]"}},
-			"discord1": {"enabled": true, "type": "discord", "settings": {"token": "[NOT_HERE]"}}
+			"slack1": {"enabled": true, "type": "slack", "settings": {"bot_token": "[NOT_HERE]"}},
+			"web1": {"enabled": true, "type": "web", "settings": {"ping_interval": 45, "token": "[NOT_HERE]"}},
+			"slack2": {"enabled": true, "type": "slack", "settings": {"app_token": "[NOT_HERE]"}}
 		}
 	}`
 	var wrapper ChannelsWrapper
@@ -686,53 +655,48 @@ func TestChannel_MultipleChannels_PartialYAMLMerge(t *testing.T) {
 	require.Len(t, wrapper.Channels, 3)
 	t.Logf("wrapper: %v", wrapper)
 
-	// YAML has only 2 secrets (missing tg2)
+	// YAML has only 2 of the 3 channels' secrets (missing web1), and secrets
+	// of a channel the JSON does not have (ghost), which are skipped.
 	yamlData := `
 channels:
-  tg1:
+  slack1:
     settings:
-      token: "TOKEN_1"
-  discord1:
+      bot_token: "TOKEN_1"
+  slack2:
     settings:
-      token: "DISCORD_TOKEN"
+      app_token: "SLACK_APP_TOKEN"
+  ghost:
+    settings:
+      bot_token: "GHOST_TOKEN"
 `
-	//var yamlWrapper struct {
-	//	Channels map[string]struct {
-	//		Settings RawNode `yaml:"settings"`
-	//	} `yaml:"channels"`
-	//}
-	assert.True(t, wrapper.Channels["tg1"].Enabled)
-	assert.Equal(t, "telegram", wrapper.Channels["tg1"].Type)
+	assert.True(t, wrapper.Channels["slack1"].Enabled)
+	assert.Equal(t, "slack", wrapper.Channels["slack1"].Type)
 
 	require.NoError(t, yaml.Unmarshal([]byte(yamlData), &wrapper))
 	t.Logf("yamlWrapper: %v", wrapper)
 	require.Len(t, wrapper.Channels, 3)
+	assert.Nil(t, wrapper.Channels["ghost"])
 
-	assert.True(t, wrapper.Channels["tg1"].Enabled)
+	assert.True(t, wrapper.Channels["slack1"].Enabled)
 
-	t.Logf("wrapper: %v", string(wrapper.Channels["tg1"].Settings))
-	//// Merge by name; missing keys are simply absent from the YAML map (no-op)
-	//for name, ch := range wrapper.Channels {
-	//	if overlay, ok := yamlWrapper.Channels[name]; ok {
-	//		require.NoError(t, ch.MergeSecure(overlay.Settings))
-	//	}
-	//}
+	t.Logf("wrapper: %v", string(wrapper.Channels["slack1"].Settings))
 
-	// tg1: merged from YAML
-	var tg1 TelegramSettings
-	require.NoError(t, wrapper.Channels["tg1"].Decode(&tg1))
-	assert.Equal(t, "TOKEN_1", tg1.Token.String())
+	// slack1: merged from YAML
+	var slack1 SlackSettings
+	require.NoError(t, wrapper.Channels["slack1"].Decode(&slack1))
+	assert.Equal(t, "TOKEN_1", slack1.BotToken.String())
 
-	// tg2: no YAML entry → MergeSecure not called → token stays [NOT_HERE] → empty
-	var tg2 TelegramSettings
-	require.NoError(t, wrapper.Channels["tg2"].Decode(&tg2))
-	assert.Equal(t, "", tg2.Token.String())
-	assert.Equal(t, "https://custom-api.example.com", tg2.BaseURL)
+	// web1: no YAML entry → token stays [NOT_HERE] → empty
+	var web1 WebChatSettings
+	require.NoError(t, wrapper.Channels["web1"].Decode(&web1))
+	assert.Equal(t, "", web1.Token.String())
+	assert.Equal(t, 45, web1.PingInterval)
 
-	// discord1: merged from YAML
-	var disc DiscordSettings
-	require.NoError(t, wrapper.Channels["discord1"].Decode(&disc))
-	assert.Equal(t, "DISCORD_TOKEN", disc.Token.String())
+	// slack2: merged from YAML
+	var slack2 SlackSettings
+	require.NoError(t, wrapper.Channels["slack2"].Decode(&slack2))
+	assert.Equal(t, "SLACK_APP_TOKEN", slack2.AppToken.String())
+	assert.Equal(t, "", slack2.BotToken.String())
 }
 
 // ═══════════════════════════════════════════════════
@@ -742,16 +706,16 @@ channels:
 func TestChannel_YAML_ListWithSecure(t *testing.T) {
 	yamlData := `
 channels:
-  tg_bot:
+  test_bot:
     enabled: true
-    type: telegram
+    type: test_bot
     settings:
-      token: "TG_TOKEN_FROM_YAML"
-  discord_bot:
+      token: "BOT_TOKEN_FROM_YAML"
+  keyed_bot:
     enabled: true
-    type: discord
+    type: test_keyed
     settings:
-      token: "DISCORD_TOKEN_FROM_YAML"
+      token: "KEYED_TOKEN_FROM_YAML"
 `
 
 	type ChannelsWrapper struct {
@@ -762,13 +726,13 @@ channels:
 	require.NoError(t, yaml.Unmarshal([]byte(yamlData), &wrapper))
 	require.Len(t, wrapper.Channels, 2)
 
-	var tg testTelegramConfig
-	require.NoError(t, wrapper.Channels["tg_bot"].Decode(&tg))
-	assert.Equal(t, "TG_TOKEN_FROM_YAML", tg.Token.String())
+	var bot testBotConfig
+	require.NoError(t, wrapper.Channels["test_bot"].Decode(&bot))
+	assert.Equal(t, "BOT_TOKEN_FROM_YAML", bot.Token.String())
 
-	var disc testDiscordConfig
-	require.NoError(t, wrapper.Channels["discord_bot"].Decode(&disc))
-	assert.Equal(t, "DISCORD_TOKEN_FROM_YAML", disc.Token.String())
+	var keyed testKeyedConfig
+	require.NoError(t, wrapper.Channels["keyed_bot"].Decode(&keyed))
+	assert.Equal(t, "KEYED_TOKEN_FROM_YAML", keyed.Token.String())
 }
 
 // ═══════════════════════════════════════════════════
@@ -777,13 +741,13 @@ channels:
 
 func TestRemoveSecureFields(t *testing.T) {
 	t.Run("removes known secure fields", func(t *testing.T) {
-		r := RawNode(`{"base_url": "https://api.telegram.org", "token": "SECRET"}`)
+		r := RawNode(`{"base_url": "https://api.example.com", "token": "SECRET"}`)
 		names := map[string]struct{}{"token": {}}
 		cleaned := removeSecureFields(r, names)
 
 		var m map[string]any
 		json.Unmarshal(cleaned, &m)
-		assert.Equal(t, "https://api.telegram.org", m["base_url"])
+		assert.Equal(t, "https://api.example.com", m["base_url"])
 		assert.NotContains(t, m, "token")
 	})
 
@@ -801,7 +765,7 @@ func TestRemoveSecureFields(t *testing.T) {
 
 func TestFilterSecureFields(t *testing.T) {
 	t.Run("keeps only secure fields", func(t *testing.T) {
-		r := RawNode(`{"base_url": "https://api.telegram.org", "token": "SECRET"}`)
+		r := RawNode(`{"base_url": "https://api.example.com", "token": "SECRET"}`)
 		names := map[string]struct{}{"token": {}}
 		filtered := filterSecureFields(r, names)
 
@@ -831,7 +795,7 @@ func TestChannel_SecureStrings_ApiKeys(t *testing.T) {
 	// Step 1: Load from extend.json
 	jsonData := `{
 		"enabled": true,
-		"type": "discord",
+		"type": "test_keyed",
 		"settings": {
 			"mention_only": true,
 			"token": "[NOT_HERE]",
@@ -844,7 +808,7 @@ func TestChannel_SecureStrings_ApiKeys(t *testing.T) {
 	// Step 2: Merge secure from security.yml
 	yamlData := `
 settings:
-  token: "DISCORD_BOT_TOKEN"
+  token: "KEYED_BOT_TOKEN"
   api_keys:
     - "KEY_1"
     - "KEY_2"
@@ -852,10 +816,10 @@ settings:
 	require.NoError(t, yaml.Unmarshal([]byte(yamlData), &ch))
 
 	// Step 3: Decode — both SecureString and SecureStrings should be populated
-	var cfg testDiscordConfig
+	var cfg testKeyedConfig
 	require.NoError(t, ch.Decode(&cfg))
 	assert.True(t, cfg.MentionOnly)
-	assert.Equal(t, "DISCORD_BOT_TOKEN", cfg.Token.String())
+	assert.Equal(t, "KEYED_BOT_TOKEN", cfg.Token.String())
 	require.Len(t, cfg.ApiKeys, 2)
 	assert.Equal(t, "KEY_1", cfg.ApiKeys[0].String())
 	assert.Equal(t, "KEY_2", cfg.ApiKeys[1].String())
@@ -866,7 +830,7 @@ settings:
 	t.Logf("Saved extend.json:\n%s", string(outJSON))
 	assert.NotContains(t, string(outJSON), "token")
 	assert.NotContains(t, string(outJSON), "api_keys")
-	assert.NotContains(t, string(outJSON), "DISCORD_BOT_TOKEN")
+	assert.NotContains(t, string(outJSON), "KEYED_BOT_TOKEN")
 	assert.NotContains(t, string(outJSON), "KEY")
 	assert.Contains(t, string(outJSON), "mention_only")
 
@@ -874,7 +838,7 @@ settings:
 	outYAML, err := yaml.Marshal(ch)
 	require.NoError(t, err)
 	t.Logf("Saved security.yml:\n%s", string(outYAML))
-	assert.Contains(t, string(outYAML), "DISCORD_BOT_TOKEN")
+	assert.Contains(t, string(outYAML), "KEYED_BOT_TOKEN")
 	assert.Contains(t, string(outYAML), "KEY_1")
 	assert.Contains(t, string(outYAML), "KEY_2")
 	assert.NotContains(t, string(outYAML), "mention_only")
@@ -885,7 +849,7 @@ func TestChannel_SecureStrings_ApiKeys_EmptyInJSON(t *testing.T) {
 	// JSON has no api_keys field
 	jsonData := `{
 		"enabled": true,
-		"type": "discord",
+		"type": "test_keyed",
 		"settings": {
 			"mention_only": true,
 			"token": "[NOT_HERE]"
@@ -903,7 +867,7 @@ settings:
 `
 	require.NoError(t, yaml.Unmarshal([]byte(yamlData), &ch))
 
-	var cfg testDiscordConfig
+	var cfg testKeyedConfig
 	require.NoError(t, ch.Decode(&cfg))
 	assert.Equal(t, "MY_TOKEN", cfg.Token.String())
 	require.Len(t, cfg.ApiKeys, 1)
@@ -914,7 +878,7 @@ func TestChannel_SecureStrings_ApiKeys_NoMerge(t *testing.T) {
 	// JSON only, no merge — SecureStrings should be empty
 	jsonData := `{
 		"enabled": true,
-		"type": "discord",
+		"type": "test_keyed",
 		"settings": {
 			"mention_only": true,
 			"token": "[NOT_HERE]",
@@ -924,7 +888,7 @@ func TestChannel_SecureStrings_ApiKeys_NoMerge(t *testing.T) {
 	var ch Channel
 	require.NoError(t, json.Unmarshal([]byte(jsonData), &ch))
 
-	var cfg testDiscordConfig
+	var cfg testKeyedConfig
 	require.NoError(t, ch.Decode(&cfg))
 	assert.True(t, cfg.MentionOnly)
 	assert.Equal(t, "", cfg.Token.String())

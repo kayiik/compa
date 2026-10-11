@@ -85,7 +85,7 @@ export async function resetAppConfig(): Promise<ConfigActionResponse> {
 
 /** A sender a channel held for the owner's approval. */
 export interface PairingRequest {
-  /** The allow_from entry approving adds, e.g. telegram:123. */
+  /** The allow_from entry approving adds, e.g. slack:U123ABC. */
   sender_id: string
   platform_id: string
   display_name: string
@@ -115,48 +115,6 @@ export async function decidePairingRequest(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ sender_id: senderID }),
     },
-  )
-}
-
-// WeChat QR login flow API
-
-export interface WeixinFlowResponse {
-  flow_id: string
-  status: "wait" | "scaned" | "confirmed" | "expired" | "error"
-  qr_data_uri?: string
-  account_id?: string
-  error?: string
-}
-
-export interface WecomFlowResponse {
-  flow_id: string
-  status: "wait" | "scaned" | "confirmed" | "expired" | "error"
-  qr_data_uri?: string
-  bot_id?: string
-  error?: string
-}
-
-export async function startWeixinFlow(): Promise<WeixinFlowResponse> {
-  return request<WeixinFlowResponse>("/api/weixin/flows", { method: "POST" })
-}
-
-export async function pollWeixinFlow(
-  flowID: string,
-): Promise<WeixinFlowResponse> {
-  return request<WeixinFlowResponse>(
-    `/api/weixin/flows/${encodeURIComponent(flowID)}`,
-  )
-}
-
-export async function startWecomFlow(): Promise<WecomFlowResponse> {
-  return request<WecomFlowResponse>("/api/wecom/flows", { method: "POST" })
-}
-
-export async function pollWecomFlow(
-  flowID: string,
-): Promise<WecomFlowResponse> {
-  return request<WecomFlowResponse>(
-    `/api/wecom/flows/${encodeURIComponent(flowID)}`,
   )
 }
 

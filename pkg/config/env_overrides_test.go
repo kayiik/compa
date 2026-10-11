@@ -75,39 +75,41 @@ func TestEveryEnvOverrideHasTheCompaPrefix(t *testing.T) {
 	}
 }
 
-func TestWeComIgnoresUnprefixedEnvironment(t *testing.T) {
-	t.Setenv("SECRET", "unrelated-secret")
-	t.Setenv("BOT_ID", "unrelated-bot")
-	t.Setenv("COMPA_CHANNELS_WECOM_WEBSOCKET_URL", "wss://wecom.example")
+func TestSlackIgnoresUnprefixedEnvironment(t *testing.T) {
+	t.Setenv("BOT_TOKEN", "unrelated-bot-token")
+	t.Setenv("APP_TOKEN", "unrelated-app-token")
+	t.Setenv("TOKEN", "unrelated-token")
+	t.Setenv("COMPA_CHANNELS_SLACK_APP_TOKEN", "xapp-from-env")
 
 	channels := ChannelsConfig{
-		"wecom": {Type: ChannelWeCom, Settings: RawNode(`{"bot_id":"bot-1"}`)},
+		"slack": {Type: ChannelSlack, Settings: RawNode(`{"bot_token":"xoxb-1"}`)},
 	}
 	if err := InitChannelList(channels); err != nil {
 		t.Fatalf("InitChannelList() error = %v", err)
 	}
-	decoded, err := channels["wecom"].GetDecoded()
+	decoded, err := channels["slack"].GetDecoded()
 	if err != nil {
 		t.Fatalf("GetDecoded() error = %v", err)
 	}
-	settings := decoded.(*WeComSettings)
-	if settings.Secret.String() != "" || settings.BotID != "bot-1" {
-		t.Fatalf("WeCom took unprefixed variables: secret=%q bot_id=%q", settings.Secret.String(), settings.BotID)
+	settings := decoded.(*SlackSettings)
+	if settings.BotToken.String() != "xoxb-1" {
+		t.Fatalf("Slack took unprefixed variables: bot_token=%q", settings.BotToken.String())
 	}
-	if settings.WebSocketURL != "wss://wecom.example" {
-		t.Fatalf("websocket_url = %q, want the COMPA_CHANNELS_WECOM_WEBSOCKET_URL value", settings.WebSocketURL)
+	if settings.AppToken.String() != "xapp-from-env" {
+		t.Fatalf("app_token = %q, want the COMPA_CHANNELS_SLACK_APP_TOKEN value", settings.AppToken.String())
 	}
 }
 
 func TestChannelEnvOverrideErrorNamesTheChannel(t *testing.T) {
-	t.Setenv("COMPA_CHANNELS_TELEGRAM_MEDIA_GROUP_DELAY_MS", "soon")
+	// A file:// reference without a file name cannot be resolved.
+	t.Setenv("COMPA_CHANNELS_SLACK_BOT_TOKEN", "file://")
 
-	channels := ChannelsConfig{"my_bot": {Type: ChannelTelegram}}
+	channels := ChannelsConfig{"my_bot": {Type: ChannelSlack}}
 	err := InitChannelList(channels)
 	if err == nil {
 		t.Fatal("InitChannelList() accepted a malformed environment override")
 	}
-	if !strings.Contains(err.Error(), `"my_bot"`) || !strings.Contains(err.Error(), "MediaGroupDelayMS") {
+	if !strings.Contains(err.Error(), `"my_bot"`) || !strings.Contains(err.Error(), "BotToken") {
 		t.Fatalf("error = %q, want the channel and the setting named", err)
 	}
 }
@@ -156,18 +158,30 @@ func readFile(t *testing.T, path string) string {
 	return string(data)
 }
 
-func telegramSettings(t *testing.T, cfg *Config) *TelegramSettings {
+func slackSettings(t *testing.T, cfg *Config) *SlackSettings {
 	t.Helper()
-	decoded, err := cfg.Channels.Get("telegram").GetDecoded()
+	decoded, err := cfg.Channels.Get("slack").GetDecoded()
 	if err != nil {
 		t.Fatalf("GetDecoded() error = %v", err)
 	}
-	return decoded.(*TelegramSettings)
+	return decoded.(*SlackSettings)
+}
+
+func whatsAppSettings(t *testing.T, cfg *Config) *WhatsAppSettings {
+	t.Helper()
+	decoded, err := cfg.Channels.Get("whatsapp").GetDecoded()
+	if err != nil {
+		t.Fatalf("GetDecoded() error = %v", err)
+	}
+	return decoded.(*WhatsAppSettings)
 }
 
 const envTestConfig = `{
   "gateway": {"host": "localhost", "port": 18790},
-  "channel_list": {"telegram": {"enabled": true, "type": "telegram", "settings": {"base_url": "https://api.telegram.org"}}}
+  "channel_list": {
+    "slack": {"enabled": true, "type": "slack", "settings": {}},
+    "whatsapp": {"enabled": false, "type": "whatsapp", "settings": {"session_store_path": "/file/whatsapp"}}
+  }
 }`
 
 // A token set only in the environment must not reach .security.yml when an
@@ -179,20 +193,20 @@ func TestSaveConfigKeepsEnvOnlySecretsOutOfTheFiles(t *testing.T) {
 		{name: "no file token", secrets: ""},
 		{
 			name:      "file token",
-			secrets:   "channel_list:\n  telegram:\n    settings:\n      token: tg-from-file\n",
-			wantSaved: "tg-from-file",
+			secrets:   "channel_list:\n  slack:\n    settings:\n      bot_token: xoxb-from-file\n",
+			wantSaved: "xoxb-from-file",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			path := writeEnvTestConfig(t, envTestConfig, tc.secrets)
-			t.Setenv("COMPA_CHANNELS_TELEGRAM_TOKEN", "tg-from-env")
+			t.Setenv("COMPA_CHANNELS_SLACK_BOT_TOKEN", "xoxb-from-env")
 			t.Setenv("COMPA_SKILLS_REGISTRIES_GITHUB_AUTH_TOKEN", "ghp-from-env")
 
 			cfg, err := LoadConfig(path)
 			if err != nil {
 				t.Fatalf("LoadConfig() error = %v", err)
 			}
-			if got := telegramSettings(t, cfg).Token.String(); got != "tg-from-env" {
+			if got := slackSettings(t, cfg).BotToken.String(); got != "xoxb-from-env" {
 				t.Fatalf("loaded token = %q, want the environment's", got)
 			}
 			cfg.Agents.Defaults.MaxTokens = 1234
@@ -202,7 +216,7 @@ func TestSaveConfigKeepsEnvOnlySecretsOutOfTheFiles(t *testing.T) {
 
 			secrets := readFile(t, filepath.Join(filepath.Dir(path), SecurityConfigFile))
 			saved := readFile(t, path)
-			for _, envValue := range []string{"tg-from-env", "ghp-from-env"} {
+			for _, envValue := range []string{"xoxb-from-env", "ghp-from-env"} {
 				if strings.Contains(secrets, envValue) || strings.Contains(saved, envValue) {
 					t.Fatalf("the environment's %q was written:\n%s\n%s", envValue, secrets, saved)
 				}
@@ -214,7 +228,7 @@ func TestSaveConfigKeepsEnvOnlySecretsOutOfTheFiles(t *testing.T) {
 				t.Fatalf("the unrelated change was not saved:\n%s", saved)
 			}
 			// Saving does not touch the config in use.
-			if got := telegramSettings(t, cfg).Token.String(); got != "tg-from-env" {
+			if got := slackSettings(t, cfg).BotToken.String(); got != "xoxb-from-env" {
 				t.Fatalf("SaveConfig changed the live token to %q", got)
 			}
 		})
@@ -225,7 +239,7 @@ func TestSaveConfigKeepsEnvOverriddenSettingsOutOfTheFiles(t *testing.T) {
 	path := writeEnvTestConfig(t, envTestConfig, "")
 	t.Setenv("COMPA_GATEWAY_PORT", "19999")
 	t.Setenv(EnvGatewayHost, "0.0.0.0")
-	t.Setenv("COMPA_CHANNELS_TELEGRAM_BASE_URL", "https://telegram.example")
+	t.Setenv("COMPA_CHANNELS_WHATSAPP_SESSION_STORE_PATH", "/env/whatsapp")
 
 	cfg, err := LoadConfig(path)
 	if err != nil {
@@ -234,6 +248,9 @@ func TestSaveConfigKeepsEnvOverriddenSettingsOutOfTheFiles(t *testing.T) {
 	if cfg.Gateway.Port != 19999 || cfg.Gateway.Host != "0.0.0.0" {
 		t.Fatalf("gateway = %+v, want the environment's host and port", cfg.Gateway)
 	}
+	if got := whatsAppSettings(t, cfg).SessionStorePath; got != "/env/whatsapp" {
+		t.Fatalf("whatsapp session_store_path = %q, want the environment's", got)
+	}
 	if err := SaveConfig(path, cfg); err != nil {
 		t.Fatalf("SaveConfig() error = %v", err)
 	}
@@ -241,7 +258,7 @@ func TestSaveConfigKeepsEnvOverriddenSettingsOutOfTheFiles(t *testing.T) {
 	var saved struct {
 		Gateway  GatewayConfig `json:"gateway"`
 		Channels map[string]struct {
-			Settings TelegramSettings `json:"settings"`
+			Settings WhatsAppSettings `json:"settings"`
 		} `json:"channel_list"`
 	}
 	if err := json.Unmarshal([]byte(readFile(t, path)), &saved); err != nil {
@@ -250,8 +267,8 @@ func TestSaveConfigKeepsEnvOverriddenSettingsOutOfTheFiles(t *testing.T) {
 	if saved.Gateway.Port != 18790 || saved.Gateway.Host != "localhost" {
 		t.Fatalf("saved gateway = %+v, want the file's localhost:18790", saved.Gateway)
 	}
-	if got := saved.Channels["telegram"].Settings.BaseURL; got != "https://api.telegram.org" {
-		t.Fatalf("saved telegram base_url = %q, want the file's", got)
+	if got := saved.Channels["whatsapp"].Settings.SessionStorePath; got != "/file/whatsapp" {
+		t.Fatalf("saved whatsapp session_store_path = %q, want the file's", got)
 	}
 	if cfg.Gateway.Port != 19999 {
 		t.Fatalf("SaveConfig changed the live port to %d", cfg.Gateway.Port)
@@ -264,7 +281,7 @@ func TestSaveConfigKeepsEnvOverriddenSettingsOutOfTheFiles(t *testing.T) {
 func TestChannelEnabledEnvOverride(t *testing.T) {
 	path := writeEnvTestConfig(t, envTestConfig, "")
 	t.Setenv("COMPA_CHANNELS_WEB_ENABLED", "true")
-	t.Setenv("COMPA_CHANNELS_TELEGRAM_ENABLED", "false")
+	t.Setenv("COMPA_CHANNELS_SLACK_ENABLED", "false")
 	t.Setenv("COMPA_CHANNELS_WEB_STREAMING_ENABLED", "false")
 
 	cfg, err := LoadConfig(path)
@@ -278,8 +295,8 @@ func TestChannelEnabledEnvOverride(t *testing.T) {
 	if decoded, err := web.GetDecoded(); err != nil || decoded.(*WebChatSettings).Streaming.Enabled {
 		t.Fatalf("web settings = %+v, %v; want streaming off", decoded, err)
 	}
-	if cfg.Channels.Get("telegram").Enabled {
-		t.Fatal("telegram channel is on, want the environment's off")
+	if cfg.Channels.Get("slack").Enabled {
+		t.Fatal("slack channel is on, want the environment's off")
 	}
 
 	if err := SaveConfig(path, cfg); err != nil {
@@ -296,8 +313,8 @@ func TestChannelEnabledEnvOverride(t *testing.T) {
 	if err := json.Unmarshal([]byte(readFile(t, path)), &saved); err != nil {
 		t.Fatal(err)
 	}
-	if !saved.Channels["telegram"].Enabled {
-		t.Fatalf("saved telegram entry = %+v, want the file's: on", saved.Channels["telegram"])
+	if !saved.Channels["slack"].Enabled {
+		t.Fatalf("saved slack entry = %+v, want the file's: on", saved.Channels["slack"])
 	}
 	if entry, ok := saved.Channels["web"]; ok && (entry.Enabled || !entry.Settings.Streaming.Enabled) {
 		t.Fatalf("saved web entry = %+v, want the default's: off, streaming on", entry)
@@ -317,9 +334,9 @@ func TestChannelEnabledEnvOverrideRejectsABadValue(t *testing.T) {
 
 func TestChannelEnabledEnvName(t *testing.T) {
 	for name, want := range map[string]string{
-		"web":          "COMPA_CHANNELS_WEB_ENABLED",
-		"work-bot.2":   "COMPA_CHANNELS_WORK_BOT_2_ENABLED",
-		"Telegram_Alt": "COMPA_CHANNELS_TELEGRAM_ALT_ENABLED",
+		"web":        "COMPA_CHANNELS_WEB_ENABLED",
+		"work-bot.2": "COMPA_CHANNELS_WORK_BOT_2_ENABLED",
+		"Slack_Alt":  "COMPA_CHANNELS_SLACK_ALT_ENABLED",
 	} {
 		if got := channelEnabledEnv(name); got != want {
 			t.Errorf("channelEnabledEnv(%q) = %q, want %q", name, got, want)
@@ -332,14 +349,14 @@ func TestChannelEnabledEnvName(t *testing.T) {
 func TestSaveConfigWritesSettingsChangedAfterLoad(t *testing.T) {
 	path := writeEnvTestConfig(t, envTestConfig, "")
 	t.Setenv("COMPA_GATEWAY_PORT", "19999")
-	t.Setenv("COMPA_CHANNELS_TELEGRAM_TOKEN", "tg-from-env")
+	t.Setenv("COMPA_CHANNELS_SLACK_BOT_TOKEN", "xoxb-from-env")
 
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
 	cfg.Gateway.Port = 20000
-	telegramSettings(t, cfg).Token = *NewSecureString("tg-from-user")
+	slackSettings(t, cfg).BotToken = *NewSecureString("xoxb-from-user")
 	if err := SaveConfig(path, cfg); err != nil {
 		t.Fatalf("SaveConfig() error = %v", err)
 	}
@@ -347,7 +364,7 @@ func TestSaveConfigWritesSettingsChangedAfterLoad(t *testing.T) {
 	if saved := readFile(t, path); !strings.Contains(saved, `"port": 20000`) {
 		t.Fatalf("the changed port was not saved:\n%s", saved)
 	}
-	if secrets := readFile(t, filepath.Join(filepath.Dir(path), SecurityConfigFile)); !strings.Contains(secrets, "tg-from-user") {
+	if secrets := readFile(t, filepath.Join(filepath.Dir(path), SecurityConfigFile)); !strings.Contains(secrets, "xoxb-from-user") {
 		t.Fatalf("the changed token was not saved:\n%s", secrets)
 	}
 }

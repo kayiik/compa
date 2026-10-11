@@ -47,10 +47,10 @@ func TestSecurityConfigIntegration(t *testing.T) {
 		configPath := filepath.Join(tmpDir, "config.json")
 		configContent := `{
   "channel_list": {
-    "telegram": {
+    "slack": {
       "enabled": true,
       "settings": {
-        "token": "token-from-config-json-direct"
+        "bot_token": "token-from-config-json-direct"
       }
     }
   },
@@ -86,9 +86,9 @@ func TestSecurityConfigIntegration(t *testing.T) {
       - "tvly-from-security-yml"
 
 channel_list:
-  telegram:
+  slack:
     settings:
-      token: "token-from-security-yml"
+      bot_token: "token-from-security-yml"
 
 skills:
   registries:
@@ -107,14 +107,14 @@ skills:
 		require.Len(t, cfg.Tools.Web.Tavily.APIKeys, 1)
 
 		// Verify channel token from .security.yml takes precedence
-		var tgTokenCfg *TelegramSettings
-		if bc := cfg.Channels.Get("telegram"); bc != nil {
+		var slackTokenCfg *SlackSettings
+		if bc := cfg.Channels.Get("slack"); bc != nil {
 			if decoded, err := bc.GetDecoded(); err == nil && decoded != nil {
-				tgTokenCfg = decoded.(*TelegramSettings)
+				slackTokenCfg = decoded.(*SlackSettings)
 			}
 		}
-		require.NotNil(t, tgTokenCfg)
-		assert.Equal(t, "token-from-security-yml", tgTokenCfg.Token.String())
+		require.NotNil(t, slackTokenCfg)
+		assert.Equal(t, "token-from-security-yml", slackTokenCfg.BotToken.String())
 
 		// Verify web tool API key from config.json is kept when .security.yml has none
 		assert.Equal(t, "BSA-from-config-json-direct", cfg.Tools.Web.Brave.APIKey())
@@ -193,72 +193,40 @@ func TestAllSecurityKeysAccessible(t *testing.T) {
 		err = os.WriteFile(clawhubAuthTokenFile, []byte("clawhub-auth-token-from-file"), 0o600)
 		require.NoError(t, err)
 
+		webClientTokenFile := filepath.Join(tmpDir, "web_client_token.txt")
+		err = os.WriteFile(webClientTokenFile, []byte("web-client-token-from-file"), 0o600)
+		require.NoError(t, err)
+
 		// Create config.json without sensitive values (they'll be in .security.yml)
 		configPath := filepath.Join(tmpDir, "config.json")
 		configContent := `{
   "channel_list": {
-    "telegram": {
-      "enabled": true
-    },
-    "feishu": {
-      "enabled": true,
-      "settings": {
-        "app_id": "test_app_id"
-      }
-    },
-    "discord": {
-      "enabled": true
-    },
-    "dingtalk": {
-      "enabled": true,
-      "settings": {
-        "client_id": "test_client_id"
-      }
-    },
     "slack": {
       "enabled": true
-    },
-    "matrix": {
-      "enabled": true,
-      "settings": {
-        "homeserver": "https://matrix.org",
-        "user_id": "@test:matrix.org"
-      }
-    },
-    "line": {
-      "enabled": true,
-      "settings": {
-        "webhook_host": "localhost",
-        "webhook_port": 8080,
-        "webhook_path": "/webhook"
-      }
-    },
-    "onebot": {
-      "enabled": true,
-      "settings": {
-        "ws_url": "ws://localhost:8080"
-      }
-    },
-    "wecom": {
-      "enabled": true,
-      "settings": {
-        "bot_id": "test_wecom_bot_id"
-      }
     },
     "web": {
       "enabled": true
     },
-    "irc": {
+    "web_client": {
       "enabled": true,
       "settings": {
-        "server": "irc.example.com",
-        "nick": "testbot"
+        "url": "ws://localhost:18790/ws"
       }
     },
-    "qq": {
+    "teams_webhook": {
       "enabled": true,
       "settings": {
-        "app_id": "test_qq_app_id"
+        "webhooks": {
+          "ops": {"title": "Ops"}
+        }
+      }
+    },
+    "slack_webhook": {
+      "enabled": true,
+      "settings": {
+        "webhooks": {
+          "alerts": {"username": "compa"}
+        }
       }
     }
   },
@@ -295,49 +263,26 @@ func TestAllSecurityKeysAccessible(t *testing.T) {
 		// Create .security.yml with file:// references and plaintext values
 		securityPath := filepath.Join(tmpDir, SecurityConfigFile)
 		securityContent := `channel_list:
-  telegram:
-    settings:
-      token: "123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
-  feishu:
-    settings:
-      app_secret: "feishu_test_app_secret"
-      encrypt_key: "feishu_test_encrypt_key"
-      verification_token: "feishu_test_verification_token"
-  discord:
-    settings:
-      token: "discord_test_bot_token_xyz"
-  dingtalk:
-    settings:
-      client_secret: "dingtalk_test_client_secret"
   slack:
     settings:
       bot_token: "xoxb-slack-bot-token-123"
       app_token: "xapp-slack-app-token-456"
-  matrix:
-    settings:
-      access_token: "matrix_test_access_token"
-  line:
-    settings:
-      channel_secret: "line_test_channel_secret"
-      channel_access_token: "line_test_channel_access_token"
-  onebot:
-    settings:
-      access_token: "onebot_test_access_token"
-  wecom:
-    settings:
-      secret: "wecom_test_secret"
   web:
     settings:
       token: "web_test_token"
-  irc:
+  web_client:
     settings:
-      password: "irc_test_password"
-      nickserv_password: "irc_test_nickserv_password"
-      sasl_password: "irc_test_sasl_password"
-  qq:
+      token: "file://web_client_token.txt"
+  teams_webhook:
     settings:
-      app_secret: "qq_test_app_secret"
-
+      webhooks:
+        ops:
+          webhook_url: "https://teams.example/webhook/ops-secret"
+  slack_webhook:
+    settings:
+      webhooks:
+        alerts:
+          webhook_url: "https://hooks.slack.example/services/T0/B0/alerts-secret"
 web:
   brave:
     api_keys:
@@ -385,30 +330,6 @@ skills:
 		}
 
 		// Verify Channel tokens via Key() methods
-		// Telegram
-		tgSec := decodeChannel("telegram")
-		assert.Equal(t, "123456789:ABCdefGHIjklMNOpqrsTUVwxyz", secureStr(tgSec.(*TelegramSettings).Token))
-		t.Logf("Telegram Token(): %s", secureStr(tgSec.(*TelegramSettings).Token))
-
-		// Feishu
-		feiSec := decodeChannel("feishu")
-		assert.Equal(t, "feishu_test_app_secret", secureStr(feiSec.(*FeishuSettings).AppSecret))
-		assert.Equal(t, "feishu_test_encrypt_key", secureStr(feiSec.(*FeishuSettings).EncryptKey))
-		assert.Equal(t, "feishu_test_verification_token", secureStr(feiSec.(*FeishuSettings).VerificationToken))
-		t.Logf("Feishu AppSecret(): %s", secureStr(feiSec.(*FeishuSettings).AppSecret))
-		t.Logf("Feishu EncryptKey(): %s", secureStr(feiSec.(*FeishuSettings).EncryptKey))
-		t.Logf("Feishu VerificationToken(): %s", secureStr(feiSec.(*FeishuSettings).VerificationToken))
-
-		// Discord
-		discSec := decodeChannel("discord")
-		assert.Equal(t, "discord_test_bot_token_xyz", secureStr(discSec.(*DiscordSettings).Token))
-		t.Logf("Discord Token(): %s", secureStr(discSec.(*DiscordSettings).Token))
-
-		// DingTalk
-		dtSec := decodeChannel("dingtalk")
-		assert.Equal(t, "dingtalk_test_client_secret", secureStr(dtSec.(*DingTalkSettings).ClientSecret))
-		t.Logf("DingTalk ClientSecret(): %s", secureStr(dtSec.(*DingTalkSettings).ClientSecret))
-
 		// Slack
 		slSec := decodeChannel("slack")
 		assert.Equal(t, "xoxb-slack-bot-token-123", secureStr(slSec.(*SlackSettings).BotToken))
@@ -416,48 +337,34 @@ skills:
 		t.Logf("Slack BotToken(): %s", secureStr(slSec.(*SlackSettings).BotToken))
 		t.Logf("Slack AppToken(): %s", secureStr(slSec.(*SlackSettings).AppToken))
 
-		// Matrix
-		matSec := decodeChannel("matrix")
-		assert.Equal(t, "matrix_test_access_token", secureStr(matSec.(*MatrixSettings).AccessToken))
-		t.Logf("Matrix AccessToken(): %s", secureStr(matSec.(*MatrixSettings).AccessToken))
-
-		// LINE
-		lineSec := decodeChannel("line")
-		assert.Equal(t, "line_test_channel_secret", secureStr(lineSec.(*LINESettings).ChannelSecret))
-		assert.Equal(t, "line_test_channel_access_token", secureStr(lineSec.(*LINESettings).ChannelAccessToken))
-		t.Logf("LINE ChannelSecret(): %s", secureStr(lineSec.(*LINESettings).ChannelSecret))
-		t.Logf("LINE ChannelAccessToken(): %s", secureStr(lineSec.(*LINESettings).ChannelAccessToken))
-
-		// OneBot
-		obSec := decodeChannel("onebot")
-		assert.Equal(t, "onebot_test_access_token", secureStr(obSec.(*OneBotSettings).AccessToken))
-		t.Logf("OneBot AccessToken(): %s", secureStr(obSec.(*OneBotSettings).AccessToken))
-
-		// WeCom
-		wcSec := decodeChannel("wecom")
-		assert.Equal(t, "test_wecom_bot_id", wcSec.(*WeComSettings).BotID)
-		assert.Equal(t, "wecom_test_secret", secureStr(wcSec.(*WeComSettings).Secret))
-		t.Logf("WeCom BotID: %s", wcSec.(*WeComSettings).BotID)
-		t.Logf("WeCom Secret(): %s", secureStr(wcSec.(*WeComSettings).Secret))
-
 		// Web chat
 		webSec := decodeChannel("web")
 		assert.Equal(t, "web_test_token", secureStr(webSec.(*WebChatSettings).Token))
 		t.Logf("WebChatSettings.Token(): %s", secureStr(webSec.(*WebChatSettings).Token))
 
-		// IRC
-		ircSec := decodeChannel("irc")
-		assert.Equal(t, "irc_test_password", secureStr(ircSec.(*IRCSettings).Password))
-		assert.Equal(t, "irc_test_nickserv_password", secureStr(ircSec.(*IRCSettings).NickServPassword))
-		assert.Equal(t, "irc_test_sasl_password", secureStr(ircSec.(*IRCSettings).SASLPassword))
-		t.Logf("IRC Password(): %s", secureStr(ircSec.(*IRCSettings).Password))
-		t.Logf("IRC NickServPassword(): %s", secureStr(ircSec.(*IRCSettings).NickServPassword))
-		t.Logf("IRC SASLPassword(): %s", secureStr(ircSec.(*IRCSettings).SASLPassword))
+		// Web chat client (token from a file:// reference)
+		webClientSec := decodeChannel("web_client")
+		assert.Equal(t, "ws://localhost:18790/ws", webClientSec.(*WebChatClientSettings).URL)
+		assert.Equal(t, "web-client-token-from-file", secureStr(webClientSec.(*WebChatClientSettings).Token))
+		t.Logf("WebChatClientSettings.Token(): %s", secureStr(webClientSec.(*WebChatClientSettings).Token))
 
-		// QQ
-		qqSec := decodeChannel("qq")
-		assert.Equal(t, "qq_test_app_secret", secureStr(qqSec.(*QQSettings).AppSecret))
-		t.Logf("QQ AppSecret(): %s", secureStr(qqSec.(*QQSettings).AppSecret))
+		// Teams webhook
+		teamsSec := decodeChannel("teams_webhook")
+		teamsTarget := teamsSec.(*TeamsWebhookSettings).Webhooks["ops"]
+		assert.Equal(t, "Ops", teamsTarget.Title)
+		assert.Equal(t, "https://teams.example/webhook/ops-secret", secureStr(teamsTarget.WebhookURL))
+		t.Logf("Teams WebhookURL(): %s", secureStr(teamsTarget.WebhookURL))
+
+		// Slack webhook
+		slackHookSec := decodeChannel("slack_webhook")
+		slackHookTarget := slackHookSec.(*SlackWebhookSettings).Webhooks["alerts"]
+		assert.Equal(t, "compa", slackHookTarget.Username)
+		assert.Equal(
+			t,
+			"https://hooks.slack.example/services/T0/B0/alerts-secret",
+			secureStr(slackHookTarget.WebhookURL),
+		)
+		t.Logf("Slack WebhookURL(): %s", secureStr(slackHookTarget.WebhookURL))
 
 		// Verify Web tool API keys
 		assert.Equal(t, "BSA-brave-from-file-67890", cfg.Tools.Web.Brave.APIKey())

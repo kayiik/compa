@@ -14,8 +14,6 @@ on it; report security problems as [SECURITY.md](SECURITY.md) describes.
 
 ## Build
 
-Every Go command takes the build tags `goolm,stdjson`.
-
 Build the web UI first, as [Run from source](docs/install.md#run-from-source)
 shows: `compa` embeds `web/backend/dist` when it links, and a stale or missing
 UI there isn't reported. `make product` builds both programs into `build/`;
@@ -24,11 +22,14 @@ UI there isn't reported. `make product` builds both programs into `build/`;
 ## Test
 
 ```sh
-go test -tags goolm,stdjson -p 1 ./...
+go test -p 1 ./...
 ```
 
 Run the Go tests one package at a time (`-p 1`), as CI does. CI runs them on
 Linux, Windows and macOS, and again with `-race` on Linux (`CGO_ENABLED=1`).
+The tests don't use your Compa data: without `COMPA_HOME` they get a
+temporary folder instead of `~/.compa`, but a `COMPA_HOME` you set is used as
+it is.
 
 The web UI, in `web/frontend`:
 

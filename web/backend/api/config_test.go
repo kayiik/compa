@@ -283,13 +283,12 @@ func TestHandlePatchConfig_SavesChannelListSettingsPatch(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPatch, "/api/config", bytes.NewBufferString(`{
 		"channel_list": {
-			"feishu": {
+			"slack": {
 				"enabled": true,
-				"allow_from": ["ou_patch_user"],
+				"allow_from": ["U_PATCH_USER"],
 				"settings": {
-					"app_id": "cli_patch_app",
-					"app_secret": "patch-secret",
-					"is_lark": true
+					"bot_token": "xoxb-patch-token",
+					"app_token": "xapp-patch-token"
 				}
 			}
 		}
@@ -311,26 +310,23 @@ func TestHandlePatchConfig_SavesChannelListSettingsPatch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
-	bc := cfg.Channels[config.ChannelFeishu]
+	bc := cfg.Channels[config.ChannelSlack]
 	if !bc.Enabled {
-		t.Fatal("feishu should be enabled after PATCH")
+		t.Fatal("slack should be enabled after PATCH")
 	}
-	if len(bc.AllowFrom) != 1 || bc.AllowFrom[0] != "ou_patch_user" {
-		t.Fatalf("feishu allow_from = %#v, want [\"ou_patch_user\"]", bc.AllowFrom)
+	if len(bc.AllowFrom) != 1 || bc.AllowFrom[0] != "U_PATCH_USER" {
+		t.Fatalf("slack allow_from = %#v, want [\"U_PATCH_USER\"]", bc.AllowFrom)
 	}
 	decoded, err := bc.GetDecoded()
 	if err != nil {
 		t.Fatalf("GetDecoded() error = %v", err)
 	}
-	feishuCfg := decoded.(*config.FeishuSettings)
-	if got := feishuCfg.AppID; got != "cli_patch_app" {
-		t.Fatalf("feishu app_id = %q, want %q", got, "cli_patch_app")
+	slackCfg := decoded.(*config.SlackSettings)
+	if got := slackCfg.BotToken.String(); got != "xoxb-patch-token" {
+		t.Fatalf("slack bot_token = %q, want %q", got, "xoxb-patch-token")
 	}
-	if got := feishuCfg.AppSecret.String(); got != "patch-secret" {
-		t.Fatalf("feishu app_secret = %q, want %q", got, "patch-secret")
-	}
-	if !feishuCfg.IsLark {
-		t.Fatal("feishu is_lark should be true after PATCH")
+	if got := slackCfg.AppToken.String(); got != "xapp-patch-token" {
+		t.Fatalf("slack app_token = %q, want %q", got, "xapp-patch-token")
 	}
 }
 
@@ -352,13 +348,6 @@ func TestHandlePatchConfig_NormalizesStringChannelArrayFields(t *testing.T) {
 				},
 				"settings": {
 					"allow_origins": "https://a.example.com，http://localhost:5173，https://a.example.com"
-				}
-			},
-			"irc": {
-				"type": "irc",
-				"settings": {
-					"channels": "#ops,\n#dev,\n#ops",
-					"request_caps": "multi-prefix，echo-message\tbatch，multi-prefix"
 				}
 			}
 		}
@@ -410,27 +399,6 @@ func TestHandlePatchConfig_NormalizesStringChannelArrayFields(t *testing.T) {
 			webChatCfg.AllowOrigins,
 		)
 	}
-
-	ircChannel := cfg.Channels[config.ChannelIRC]
-	decoded, err = ircChannel.GetDecoded()
-	if err != nil {
-		t.Fatalf("GetDecoded() irc error = %v", err)
-	}
-	ircCfg := decoded.(*config.IRCSettings)
-	if len(ircCfg.Channels) != 2 ||
-		ircCfg.Channels[0] != "#ops" ||
-		ircCfg.Channels[1] != "#dev" {
-		t.Fatalf("irc channels = %#v, want [\"#ops\", \"#dev\"]", ircCfg.Channels)
-	}
-	if len(ircCfg.RequestCaps) != 3 ||
-		ircCfg.RequestCaps[0] != "multi-prefix" ||
-		ircCfg.RequestCaps[1] != "echo-message" ||
-		ircCfg.RequestCaps[2] != "batch" {
-		t.Fatalf(
-			"irc request_caps = %#v, want [\"multi-prefix\", \"echo-message\", \"batch\"]",
-			ircCfg.RequestCaps,
-		)
-	}
 }
 
 func TestHandlePatchConfig_NormalizesSingleNumericAllowFrom(t *testing.T) {
@@ -443,8 +411,8 @@ func TestHandlePatchConfig_NormalizesSingleNumericAllowFrom(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPatch, "/api/config", bytes.NewBufferString(`{
 		"channel_list": {
-			"telegram": {
-				"type": "telegram",
+			"slack": {
+				"type": "slack",
 				"allow_from": 123456
 			}
 		}
@@ -466,9 +434,9 @@ func TestHandlePatchConfig_NormalizesSingleNumericAllowFrom(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
-	telegramChannel := cfg.Channels[config.ChannelTelegram]
-	if len(telegramChannel.AllowFrom) != 1 || telegramChannel.AllowFrom[0] != "123456" {
-		t.Fatalf("telegram allow_from = %#v, want [\"123456\"]", telegramChannel.AllowFrom)
+	slackChannel := cfg.Channels[config.ChannelSlack]
+	if len(slackChannel.AllowFrom) != 1 || slackChannel.AllowFrom[0] != "123456" {
+		t.Fatalf("slack allow_from = %#v, want [\"123456\"]", slackChannel.AllowFrom)
 	}
 }
 
@@ -480,8 +448,8 @@ func TestHandlePatchConfig_RejectsInvalidChannelArrayFields(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
-	telegramChannel := cfg.Channels[config.ChannelTelegram]
-	telegramChannel.AllowFrom = config.FlexibleStringSlice{"existing-user"}
+	slackChannel := cfg.Channels[config.ChannelSlack]
+	slackChannel.AllowFrom = config.FlexibleStringSlice{"existing-user"}
 	if err := config.SaveConfig(configPath, cfg); err != nil {
 		t.Fatalf("SaveConfig() error = %v", err)
 	}
@@ -494,8 +462,8 @@ func TestHandlePatchConfig_RejectsInvalidChannelArrayFields(t *testing.T) {
 			name: "object allow_from",
 			body: `{
 				"channel_list": {
-					"telegram": {
-						"type": "telegram",
+					"slack": {
+						"type": "slack",
 						"allow_from": {"id": "bad"}
 					}
 				}
@@ -505,8 +473,8 @@ func TestHandlePatchConfig_RejectsInvalidChannelArrayFields(t *testing.T) {
 			name: "boolean allow_from",
 			body: `{
 				"channel_list": {
-					"telegram": {
-						"type": "telegram",
+					"slack": {
+						"type": "slack",
 						"allow_from": true
 					}
 				}
@@ -516,10 +484,10 @@ func TestHandlePatchConfig_RejectsInvalidChannelArrayFields(t *testing.T) {
 			name: "object settings array",
 			body: `{
 				"channel_list": {
-					"irc": {
-						"type": "irc",
+					"web": {
+						"type": "web",
 						"settings": {
-							"channels": {"name": "#ops"}
+							"allow_origins": {"origin": "https://a.example.com"}
 						}
 					}
 				}
@@ -555,12 +523,12 @@ func TestHandlePatchConfig_RejectsInvalidChannelArrayFields(t *testing.T) {
 			if err != nil {
 				t.Fatalf("LoadConfig() error = %v", err)
 			}
-			telegramChannel := cfg.Channels[config.ChannelTelegram]
-			if len(telegramChannel.AllowFrom) != 1 ||
-				telegramChannel.AllowFrom[0] != "existing-user" {
+			slackChannel := cfg.Channels[config.ChannelSlack]
+			if len(slackChannel.AllowFrom) != 1 ||
+				slackChannel.AllowFrom[0] != "existing-user" {
 				t.Fatalf(
-					"telegram allow_from = %#v, want unchanged [\"existing-user\"]",
-					telegramChannel.AllowFrom,
+					"slack allow_from = %#v, want unchanged [\"existing-user\"]",
+					slackChannel.AllowFrom,
 				)
 			}
 		})
@@ -615,16 +583,16 @@ func TestHandlePatchConfig_ClearingAllowFromDoesNotLeaveEmptyStringItem(t *testi
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
-	feishuChannel := cfg.Channels[config.ChannelFeishu]
-	feishuChannel.Enabled = true
-	feishuChannel.AllowFrom = config.FlexibleStringSlice{"ou_existing_user"}
-	decoded, err := feishuChannel.GetDecoded()
+	slackChannel := cfg.Channels[config.ChannelSlack]
+	slackChannel.Enabled = true
+	slackChannel.AllowFrom = config.FlexibleStringSlice{"U_EXISTING_USER"}
+	decoded, err := slackChannel.GetDecoded()
 	if err != nil {
 		t.Fatalf("GetDecoded() error = %v", err)
 	}
-	feishuCfg := decoded.(*config.FeishuSettings)
-	feishuCfg.AppID = "cli_existing_app"
-	feishuCfg.AppSecret = *config.NewSecureString("existing-secret")
+	slackCfg := decoded.(*config.SlackSettings)
+	slackCfg.BotToken = *config.NewSecureString("xoxb-existing")
+	slackCfg.AppToken = *config.NewSecureString("xapp-existing")
 	if err = config.SaveConfig(configPath, cfg); err != nil {
 		t.Fatalf("SaveConfig() error = %v", err)
 	}
@@ -635,12 +603,9 @@ func TestHandlePatchConfig_ClearingAllowFromDoesNotLeaveEmptyStringItem(t *testi
 
 	req := httptest.NewRequest(http.MethodPatch, "/api/config", bytes.NewBufferString(`{
 		"channel_list": {
-			"feishu": {
+			"slack": {
 				"enabled": true,
-				"allow_from": "",
-				"settings": {
-					"app_id": "cli_existing_app"
-				}
+				"allow_from": ""
 			}
 		}
 	}`))
@@ -661,9 +626,9 @@ func TestHandlePatchConfig_ClearingAllowFromDoesNotLeaveEmptyStringItem(t *testi
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
-	feishuChannel = cfg.Channels[config.ChannelFeishu]
-	if len(feishuChannel.AllowFrom) != 0 {
-		t.Fatalf("feishu allow_from = %#v, want empty slice", feishuChannel.AllowFrom)
+	slackChannel = cfg.Channels[config.ChannelSlack]
+	if len(slackChannel.AllowFrom) != 0 {
+		t.Fatalf("slack allow_from = %#v, want empty slice", slackChannel.AllowFrom)
 	}
 
 	configData, err := os.ReadFile(configPath)
@@ -686,7 +651,7 @@ func TestHandlePatchConfig_CreatesMissingChannelWithTypeAndSecret(t *testing.T) 
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
-	delete(cfg.Channels, config.ChannelIRC)
+	delete(cfg.Channels, config.ChannelSlack)
 	if err = config.SaveConfig(configPath, cfg); err != nil {
 		t.Fatalf("SaveConfig() error = %v", err)
 	}
@@ -697,12 +662,12 @@ func TestHandlePatchConfig_CreatesMissingChannelWithTypeAndSecret(t *testing.T) 
 
 	req := httptest.NewRequest(http.MethodPatch, "/api/config", bytes.NewBufferString(`{
 		"channel_list": {
-			"irc": {
+			"slack": {
 				"enabled": true,
-				"type": "irc",
+				"type": "slack",
 				"settings": {
-					"server": "irc.example.com",
-					"password": "irc-patch-password"
+					"bot_token": "xoxb-patch-secret",
+					"app_token": "xapp-patch-secret"
 				}
 			}
 		}
@@ -724,30 +689,31 @@ func TestHandlePatchConfig_CreatesMissingChannelWithTypeAndSecret(t *testing.T) 
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
-	bc := cfg.Channels[config.ChannelIRC]
+	bc := cfg.Channels[config.ChannelSlack]
 	if bc == nil {
-		t.Fatal("irc channel should exist after PATCH")
+		t.Fatal("slack channel should exist after PATCH")
 	}
-	if got := bc.Type; got != config.ChannelIRC {
-		t.Fatalf("irc type = %q, want %q", got, config.ChannelIRC)
+	if got := bc.Type; got != config.ChannelSlack {
+		t.Fatalf("slack type = %q, want %q", got, config.ChannelSlack)
 	}
 	decoded, err := bc.GetDecoded()
 	if err != nil {
 		t.Fatalf("GetDecoded() error = %v", err)
 	}
-	ircCfg := decoded.(*config.IRCSettings)
-	if got := ircCfg.Server; got != "irc.example.com" {
-		t.Fatalf("irc server = %q, want %q", got, "irc.example.com")
+	slackCfg := decoded.(*config.SlackSettings)
+	if got := slackCfg.BotToken.String(); got != "xoxb-patch-secret" {
+		t.Fatalf("slack bot_token = %q, want %q", got, "xoxb-patch-secret")
 	}
-	if got := ircCfg.Password.String(); got != "irc-patch-password" {
-		t.Fatalf("irc password = %q, want %q", got, "irc-patch-password")
+	if got := slackCfg.AppToken.String(); got != "xapp-patch-secret" {
+		t.Fatalf("slack app_token = %q, want %q", got, "xapp-patch-secret")
 	}
 	configData, err := os.ReadFile(configPath)
 	if err != nil {
 		t.Fatalf("ReadFile(configPath) error = %v", err)
 	}
-	if bytes.Contains(configData, []byte("irc-patch-password")) {
-		t.Fatalf("config file leaked irc password: %s", string(configData))
+	if bytes.Contains(configData, []byte("xoxb-patch-secret")) ||
+		bytes.Contains(configData, []byte("xapp-patch-secret")) {
+		t.Fatalf("config file leaked slack token: %s", string(configData))
 	}
 }
 
@@ -918,54 +884,6 @@ func TestHandlePatchConfig_PreservesDebugFlagOverride(t *testing.T) {
 	}
 	if got := logger.GetLevel(); got != logger.DEBUG {
 		t.Fatalf("logger.GetLevel() = %v, want %v", got, logger.DEBUG)
-	}
-}
-
-func TestHandlePatchConfig_SavesDiscordTokenFromPayload(t *testing.T) {
-	t.Skip("TODO: fix this test")
-	configPath, cleanup := setupCredentialTestEnv(t)
-	defer cleanup()
-
-	h := NewHandler(configPath)
-	mux := http.NewServeMux()
-	h.RegisterRoutes(mux)
-
-	req := httptest.NewRequest(http.MethodPatch, "/api/config", bytes.NewBufferString(`{
-		"channel_list": [
-			{
-				"name":"discord",
-				"enabled": true,
-				"token": "discord-test-token"
-			}
-		]
-	}`))
-	req.Header.Set("Content-Type", "application/json")
-
-	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf(
-			"PATCH /api/config status = %d, want %d, body=%s",
-			rec.Code,
-			http.StatusOK,
-			rec.Body.String(),
-		)
-	}
-
-	cfg, err := config.LoadConfig(configPath)
-	if err != nil {
-		t.Fatalf("LoadConfig() error = %v", err)
-	}
-	bc := cfg.Channels[config.ChannelDiscord]
-	if !bc.Enabled {
-		t.Fatal("discord should be enabled after PATCH")
-	}
-	decoded, err := bc.GetDecoded()
-	if err != nil {
-		t.Fatalf("GetDecoded() error = %v", err)
-	}
-	if got := decoded.(*config.DiscordSettings).Token.String(); got != "discord-test-token" {
-		t.Fatalf("discord token = %q, want %q", got, "discord-test-token")
 	}
 }
 
@@ -1263,31 +1181,31 @@ func TestHandleTestCommandPatterns_InvalidJSON(t *testing.T) {
 	}
 }
 
-func TestApplyConfigSecretsFromMap_TelegramToken(t *testing.T) {
+func TestApplyConfigSecretsFromMap_SlackToken(t *testing.T) {
 	cfg := config.DefaultConfig()
-	bc := cfg.Channels["telegram"]
+	bc := cfg.Channels["slack"]
 	bc.Enabled = true
 	// Pre-decode so extend is populated
 	decoded, err := bc.GetDecoded()
 	if err != nil {
 		t.Fatalf("GetDecoded() error = %v", err)
 	}
-	tgCfg := decoded.(*config.TelegramSettings)
-	tgCfg.Token = *config.NewSecureString("original-token")
+	slackCfg := decoded.(*config.SlackSettings)
+	slackCfg.BotToken = *config.NewSecureString("original-token")
 
 	raw := map[string]any{
 		"channel_list": map[string]any{
-			"telegram": map[string]any{
-				"enabled": true,
-				"token":   "secret-from-api",
+			"slack": map[string]any{
+				"enabled":   true,
+				"bot_token": "secret-from-api",
 			},
 		},
 	}
 
 	applyConfigSecretsFromMap(cfg, raw)
 
-	if got := tgCfg.Token.String(); got != "secret-from-api" {
-		t.Fatalf("telegram token = %q, want %q", got, "secret-from-api")
+	if got := slackCfg.BotToken.String(); got != "secret-from-api" {
+		t.Fatalf("slack bot_token = %q, want %q", got, "secret-from-api")
 	}
 }
 
@@ -1348,38 +1266,38 @@ func TestApplyConfigSecretsFromMap_TeamsWebhook(t *testing.T) {
 func TestApplyConfigSecretsFromMap_MultipleChannels(t *testing.T) {
 	cfg := config.DefaultConfig()
 
-	// Setup telegram
-	bc := cfg.Channels["telegram"]
+	// Setup slack
+	bc := cfg.Channels["slack"]
 	bc.Enabled = true
 	decoded, err := bc.GetDecoded()
 	if err != nil {
-		t.Fatalf("GetDecoded() telegram error = %v", err)
+		t.Fatalf("GetDecoded() slack error = %v", err)
 	}
-	tgCfg := decoded.(*config.TelegramSettings)
-	tgCfg.Token = *config.NewSecureString("old-telegram-token")
+	slackCfg := decoded.(*config.SlackSettings)
+	slackCfg.BotToken = *config.NewSecureString("old-slack-token")
 
-	// Setup discord
-	bc = cfg.Channels["discord"]
+	// Setup web
+	bc = cfg.Channels["web"]
 	bc.Enabled = true
 	decoded, err = bc.GetDecoded()
 	if err != nil {
-		t.Fatalf("GetDecoded() discord error = %v", err)
+		t.Fatalf("GetDecoded() web error = %v", err)
 	}
-	discCfg := decoded.(*config.DiscordSettings)
-	discCfg.Token = *config.NewSecureString("old-discord-token")
+	webCfg := decoded.(*config.WebChatSettings)
+	webCfg.Token = *config.NewSecureString("old-web-token")
 
 	raw := map[string]any{
 		"channel_list": map[string]any{
-			"telegram": map[string]any{
+			"slack": map[string]any{
 				"enabled": true,
 				"settings": map[string]any{
-					"token": "new-telegram-token",
+					"bot_token": "new-slack-token",
 				},
 			},
-			"discord": map[string]any{
+			"web": map[string]any{
 				"enabled": true,
 				"settings": map[string]any{
-					"token": "new-discord-token",
+					"token": "new-web-token",
 				},
 			},
 		},
@@ -1387,53 +1305,53 @@ func TestApplyConfigSecretsFromMap_MultipleChannels(t *testing.T) {
 
 	applyConfigSecretsFromMap(cfg, raw)
 
-	if got := tgCfg.Token.String(); got != "new-telegram-token" {
-		t.Fatalf("telegram token = %q, want %q", got, "new-telegram-token")
+	if got := slackCfg.BotToken.String(); got != "new-slack-token" {
+		t.Fatalf("slack bot_token = %q, want %q", got, "new-slack-token")
 	}
-	if got := discCfg.Token.String(); got != "new-discord-token" {
-		t.Fatalf("discord token = %q, want %q", got, "new-discord-token")
+	if got := webCfg.Token.String(); got != "new-web-token" {
+		t.Fatalf("web token = %q, want %q", got, "new-web-token")
 	}
 }
 
 func TestApplyConfigSecretsFromMap_SkipsNonStringValues(t *testing.T) {
 	cfg := config.DefaultConfig()
-	bc := cfg.Channels["telegram"]
+	bc := cfg.Channels["slack"]
 	bc.Enabled = true
 	decoded, err := bc.GetDecoded()
 	if err != nil {
 		t.Fatalf("GetDecoded() error = %v", err)
 	}
-	tgCfg := decoded.(*config.TelegramSettings)
-	tgCfg.Token = *config.NewSecureString("original-token")
+	slackCfg := decoded.(*config.SlackSettings)
+	slackCfg.BotToken = *config.NewSecureString("original-token")
 
 	raw := map[string]any{
 		"channel_list": map[string]any{
-			"telegram": map[string]any{
-				"enabled": true,
-				"token":   12345, // not a string, should be skipped
+			"slack": map[string]any{
+				"enabled":   true,
+				"bot_token": 12345, // not a string, should be skipped
 			},
 		},
 	}
 
 	applyConfigSecretsFromMap(cfg, raw)
 
-	if got := tgCfg.Token.String(); got != "original-token" {
-		t.Fatalf("telegram token = %q, want %q", got, "original-token")
+	if got := slackCfg.BotToken.String(); got != "original-token" {
+		t.Fatalf("slack bot_token = %q, want %q", got, "original-token")
 	}
 }
 
 func TestApplyConfigSecretsFromMap_ChannelNotDecodedYet(t *testing.T) {
 	cfg := config.DefaultConfig()
-	bc := cfg.Channels["telegram"]
+	bc := cfg.Channels["slack"]
 	bc.Enabled = true
 	// Don't decode — let the function handle lazy decoding
-	bc.Type = config.ChannelTelegram
+	bc.Type = config.ChannelSlack
 
 	raw := map[string]any{
 		"channel_list": map[string]any{
-			"telegram": map[string]any{
-				"enabled": true,
-				"token":   "lazy-decoded-token",
+			"slack": map[string]any{
+				"enabled":   true,
+				"bot_token": "lazy-decoded-token",
 			},
 		},
 	}
@@ -1444,8 +1362,8 @@ func TestApplyConfigSecretsFromMap_ChannelNotDecodedYet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetDecoded() error = %v", err)
 	}
-	tgCfg := decoded.(*config.TelegramSettings)
-	if got := tgCfg.Token.String(); got != "lazy-decoded-token" {
-		t.Fatalf("telegram token = %q, want %q", got, "lazy-decoded-token")
+	slackCfg := decoded.(*config.SlackSettings)
+	if got := slackCfg.BotToken.String(); got != "lazy-decoded-token" {
+		t.Fatalf("slack bot_token = %q, want %q", got, "lazy-decoded-token")
 	}
 }

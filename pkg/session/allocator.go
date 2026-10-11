@@ -35,7 +35,6 @@ func AllocateRouteSession(input AllocationInput) Allocation {
 
 func buildSessionScope(input AllocationInput) SessionScope {
 	inbound := input.Context
-	includeTopicInChatDimension := shouldPreserveTelegramForumIsolation(input)
 	scope := SessionScope{
 		Version: ScopeVersionV1,
 		AgentID: routing.NormalizeAgentID(input.AgentID),
@@ -64,11 +63,6 @@ func buildSessionScope(input AllocationInput) SessionScope {
 			chatID := strings.TrimSpace(inbound.ChatID)
 			if chatID == "" {
 				continue
-			}
-			if includeTopicInChatDimension {
-				if topicID := strings.TrimSpace(inbound.TopicID); topicID != "" {
-					chatID = chatID + "/" + topicID
-				}
 			}
 			chatType := strings.ToLower(strings.TrimSpace(inbound.ChatType))
 			if chatType == "" {
@@ -101,20 +95,4 @@ func buildSessionScope(input AllocationInput) SessionScope {
 	}
 
 	return scope
-}
-
-func shouldPreserveTelegramForumIsolation(input AllocationInput) bool {
-	inbound := input.Context
-	if !strings.EqualFold(strings.TrimSpace(inbound.Channel), "telegram") {
-		return false
-	}
-	if strings.TrimSpace(inbound.TopicID) == "" {
-		return false
-	}
-	for _, dimension := range input.SessionPolicy.Dimensions {
-		if strings.EqualFold(strings.TrimSpace(dimension), "topic") {
-			return false
-		}
-	}
-	return true
 }

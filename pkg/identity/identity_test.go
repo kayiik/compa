@@ -56,24 +56,24 @@ func TestParseCanonicalID(t *testing.T) {
 }
 
 func TestMatchAllowed(t *testing.T) {
-	telegramSender := bus.SenderInfo{
-		Platform:    "telegram",
+	whatsappSender := bus.SenderInfo{
+		Platform:    "whatsapp",
 		PlatformID:  "123456",
-		CanonicalID: "telegram:123456",
+		CanonicalID: "whatsapp:123456",
 		Username:    "alice",
 		DisplayName: "Alice Smith",
 	}
 
-	discordSender := bus.SenderInfo{
-		Platform:    "discord",
+	slackSender := bus.SenderInfo{
+		Platform:    "slack",
 		PlatformID:  "98765432",
-		CanonicalID: "discord:98765432",
+		CanonicalID: "slack:98765432",
 		Username:    "bob",
 		DisplayName: "bob#1234",
 	}
 
 	noCanonicalSender := bus.SenderInfo{
-		Platform:   "telegram",
+		Platform:   "whatsapp",
 		PlatformID: "999",
 		Username:   "carol",
 	}
@@ -87,20 +87,20 @@ func TestMatchAllowed(t *testing.T) {
 		// Pure numeric ID matching
 		{
 			name:    "numeric ID matches PlatformID",
-			sender:  telegramSender,
+			sender:  whatsappSender,
 			allowed: "123456",
 			want:    true,
 		},
 		{
 			name:    "numeric ID does not match",
-			sender:  telegramSender,
+			sender:  whatsappSender,
 			allowed: "654321",
 			want:    false,
 		},
 		{
 			name: "negative numeric ID matches PlatformID",
 			sender: bus.SenderInfo{
-				Platform:   "telegram",
+				Platform:   "whatsapp",
 				PlatformID: "-1001234567890",
 			},
 			allowed: "-1001234567890",
@@ -109,14 +109,14 @@ func TestMatchAllowed(t *testing.T) {
 		// Username matching
 		{
 			name:    "@username matches Username",
-			sender:  telegramSender,
+			sender:  whatsappSender,
 			allowed: "@alice",
 			want:    true,
 		},
 		{
 			name: "plain entry does not match username",
 			sender: bus.SenderInfo{
-				Platform:   "discord",
+				Platform:   "slack",
 				PlatformID: "999999",
 				Username:   "123456",
 			},
@@ -125,79 +125,79 @@ func TestMatchAllowed(t *testing.T) {
 		},
 		{
 			name:    "@username does not match",
-			sender:  telegramSender,
+			sender:  whatsappSender,
 			allowed: "@bob",
 			want:    false,
 		},
 		// "id|username" is not an allow-list format
 		{
 			name:    "id|username entry is not split",
-			sender:  telegramSender,
+			sender:  whatsappSender,
 			allowed: "123456|alice",
 			want:    false,
 		},
 		// Canonical format "platform:id"
 		{
 			name:    "canonical matches exactly",
-			sender:  telegramSender,
-			allowed: "telegram:123456",
+			sender:  whatsappSender,
+			allowed: "whatsapp:123456",
 			want:    true,
 		},
 		{
 			name:    "canonical case-insensitive platform",
-			sender:  telegramSender,
-			allowed: "Telegram:123456",
+			sender:  whatsappSender,
+			allowed: "WhatsApp:123456",
 			want:    true,
 		},
 		{
 			name:    "canonical wrong platform",
-			sender:  telegramSender,
-			allowed: "discord:123456",
+			sender:  whatsappSender,
+			allowed: "slack:123456",
 			want:    false,
 		},
 		{
 			name:    "canonical wrong ID",
-			sender:  telegramSender,
-			allowed: "telegram:654321",
+			sender:  whatsappSender,
+			allowed: "whatsapp:654321",
 			want:    false,
 		},
 		// Cross-platform canonical
 		{
-			name:    "discord canonical match",
-			sender:  discordSender,
-			allowed: "discord:98765432",
+			name:    "slack canonical match",
+			sender:  slackSender,
+			allowed: "slack:98765432",
 			want:    true,
 		},
 		{
-			name:    "telegram canonical does not match discord sender",
-			sender:  discordSender,
-			allowed: "telegram:98765432",
+			name:    "whatsapp canonical does not match slack sender",
+			sender:  slackSender,
+			allowed: "whatsapp:98765432",
 			want:    false,
 		},
 		// Sender without canonical ID
 		{
 			name:    "canonical match falls back to platform+platformID",
 			sender:  noCanonicalSender,
-			allowed: "telegram:999",
+			allowed: "whatsapp:999",
 			want:    true,
 		},
 		{
 			name:    "platform mismatch on fallback",
 			sender:  noCanonicalSender,
-			allowed: "discord:999",
+			allowed: "slack:999",
 			want:    false,
 		},
 		// Empty allowed string
 		{
 			name:    "empty allowed never matches",
-			sender:  telegramSender,
+			sender:  whatsappSender,
 			allowed: "",
 			want:    false,
 		},
 		// Whitespace handling
 		{
 			name:    "trimmed allowed matches",
-			sender:  telegramSender,
+			sender:  whatsappSender,
 			allowed: "  123456  ",
 			want:    true,
 		},
@@ -221,30 +221,17 @@ func TestMatchAllowedPlatformSpecificEntries(t *testing.T) {
 		CanonicalID: "matrix:@alice:matrix.org",
 		Username:    "@alice:matrix.org",
 	}
-	telegramSender := bus.SenderInfo{
-		Platform:    "telegram",
+	whatsappSender := bus.SenderInfo{
+		Platform:    "whatsapp",
 		PlatformID:  "123456",
-		CanonicalID: "telegram:123456",
+		CanonicalID: "whatsapp:123456",
 		Username:    "Alice_Bot",
-	}
-	discordSender := bus.SenderInfo{
-		Platform:    "discord",
-		PlatformID:  "98765432",
-		CanonicalID: "discord:98765432",
-		Username:    "bob",
 	}
 	slackSender := bus.SenderInfo{
 		Platform:    "slack",
 		PlatformID:  "U123",
 		CanonicalID: "slack:U123",
 		Username:    "Carol",
-	}
-	// DeltaChat crossposting names the sender by the local part only.
-	deltaSender := bus.SenderInfo{
-		Platform:    "deltachat",
-		PlatformID:  "alice@example.org",
-		CanonicalID: "deltachat:alice@example.org",
-		Username:    "alice",
 	}
 	ircSender := bus.SenderInfo{
 		Platform:    "irc",
@@ -265,26 +252,17 @@ func TestMatchAllowedPlatformSpecificEntries(t *testing.T) {
 		{"matrix user ID is case-sensitive", matrixSender, "@Alice:matrix.org", false},
 		// Only known channel names are platform prefixes.
 		{"unknown prefix is part of the ID", ircSender, "nick:with:colons", true},
-		{"unknown prefix does not match canonical form", telegramSender, "telegramx:123456", false},
-		{"known platform still canonical", telegramSender, "telegram:123456", true},
-		{"other known platform does not match", telegramSender, "discord:123456", false},
+		{"unknown prefix does not match canonical form", whatsappSender, "whatsappx:123456", false},
+		{"known platform still canonical", whatsappSender, "whatsapp:123456", true},
+		{"other known platform does not match", whatsappSender, "slack:123456", false},
 		{"numeric prefix is an ID", bus.SenderInfo{Platform: "x", PlatformID: "1:2"}, "1:2", true},
-		// Telegram and Discord usernames ignore case.
-		{"telegram username any case", telegramSender, "@alice_bot", true},
-		{"telegram username upper case", telegramSender, "@ALICE_BOT", true},
-		{"telegram username differs", telegramSender, "@alice", false},
-		{"discord username any case", discordSender, "@Bob", true},
+		// Usernames compare exactly.
+		{"username keeps case", whatsappSender, "@alice_bot", false},
+		{"username exact", whatsappSender, "@Alice_Bot", true},
 		{"slack username keeps case", slackSender, "@carol", false},
 		{"slack username exact", slackSender, "@Carol", true},
-		{"platform-scoped username", telegramSender, "telegram:@alice_bot", true},
-		{"platform-scoped username on other platform", telegramSender, "discord:@alice_bot", false},
-		// DeltaChat "@name" never matches a bare local part.
-		{"deltachat local part only", deltaSender, "@alice", false},
-		{"deltachat other domain", deltaSender, "@alice@evil.org", false},
-		{"deltachat full address with @", deltaSender, "@alice@example.org", true},
-		{"deltachat full address any case", deltaSender, "Alice@Example.org", true},
-		{"deltachat canonical", deltaSender, "deltachat:alice@example.org", true},
-		{"deltachat plain local part", deltaSender, "alice", false},
+		{"platform-scoped username", slackSender, "slack:@Carol", true},
+		{"platform-scoped username on other platform", slackSender, "whatsapp:@Carol", false},
 	}
 
 	for _, tt := range tests {

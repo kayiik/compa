@@ -11,8 +11,7 @@ const reply = (value: unknown) =>
 
 const CATALOG = {
   channels: [
-    { name: "telegram", config_key: "telegram" },
-    { name: "discord", config_key: "discord" },
+    { name: "slack", config_key: "slack" },
     { name: "whatsapp", config_key: "whatsapp" },
     { name: "web", config_key: "web" },
   ],
@@ -31,9 +30,7 @@ function stubServer(config: unknown) {
 }
 
 const renderList = () =>
-  renderHook(() =>
-    useChannelList({ language: "en", t: i18n.t.bind(i18n) as TFunction }),
-  )
+  renderHook(() => useChannelList({ t: i18n.t.bind(i18n) as TFunction }))
 
 describe("useChannelList", () => {
   afterEach(() => vi.unstubAllGlobals())
@@ -41,8 +38,7 @@ describe("useChannelList", () => {
   it("reads each channel's switch from channel_list, as the config has it", async () => {
     stubServer({
       channel_list: {
-        telegram: { enabled: true, type: "telegram", settings: {} },
-        discord: { enabled: false, type: "discord" },
+        slack: { enabled: false, type: "slack", settings: {} },
         whatsapp: { enabled: true, type: "whatsapp" },
         web: { enabled: true, type: "web" },
       },
@@ -53,14 +49,14 @@ describe("useChannelList", () => {
       result.current.channels.map((channel) => [channel.key, channel.enabled]),
     )
     expect(enabled).toEqual({
-      telegram: true,
-      discord: false,
+      slack: false,
       whatsapp: true,
     })
-    // Enabled channels come first.
-    expect(result.current.channels.slice(0, 2).map((item) => item.key)).toEqual(
-      expect.arrayContaining(["telegram", "whatsapp"]),
-    )
+    // Enabled channels come first, ahead of a more widely used one.
+    expect(result.current.channels.map((item) => item.key)).toEqual([
+      "whatsapp",
+      "slack",
+    ])
   })
 
   it("leaves out the browser chat's own channel", async () => {
@@ -70,7 +66,7 @@ describe("useChannelList", () => {
     expect(result.current.channels.map((channel) => channel.key)).not.toContain(
       "web",
     )
-    expect(result.current.channels).toHaveLength(3)
+    expect(result.current.channels).toHaveLength(2)
   })
 
   it("lists every channel as off when the config cannot be read", async () => {

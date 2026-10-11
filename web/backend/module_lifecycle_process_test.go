@@ -30,6 +30,8 @@ func TestSpawnedBackendPersistsDisabledModuleAcrossRestart(t *testing.T) {
 	home := t.TempDir()
 	configPath := filepath.Join(home, "config.json")
 	cfg := config.DefaultConfig()
+	// A gateway port of its own: the default, 18790, may be a running Compa's.
+	cfg.Gateway.Port = reserveProcessTestPort(t)
 	if err := config.SaveConfig(configPath, cfg); err != nil {
 		t.Fatal(err)
 	}
@@ -122,7 +124,7 @@ func processBinaryName(name string) string {
 
 func buildProcessBinary(t *testing.T, output, packagePath string) {
 	t.Helper()
-	command := exec.Command("go", "build", "-tags", "goolm,stdjson", "-o", output, packagePath)
+	command := exec.Command("go", "build", "-o", output, packagePath)
 	if combined, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("build %s: %v: %s", packagePath, err, combined)
 	}

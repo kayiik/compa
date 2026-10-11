@@ -1,5 +1,5 @@
 .PHONY: all build kernel shell product compita-images build-linux-arm build-linux-arm64 \
-	build-linux-mipsle build-android-arm64 build-shell-android-arm64 build-android-bundle build-pi-zero \
+	build-android-arm64 build-shell-android-arm64 build-android-bundle build-pi-zero \
 	build-all install uninstall uninstall-all clean vet test fmt fmt-check lint lint-docs fix deps \
 	update-deps check run build-macos-app help
 
@@ -47,16 +47,10 @@ LDFLAGS=-X $(CONFIG_PKG).Version=$(VERSION) -X $(CONFIG_PKG).GitCommit=$(GIT_COM
 GO?=go
 WEB_GO?=$(GO)
 CGO_ENABLED?=0
-GO_BUILD_TAGS?=goolm,stdjson
-# Not GOFLAGS: the go command also reads that from the environment, where a
-# value of its own would replace these tags.
-GO_BUILD_FLAGS?=-tags $(GO_BUILD_TAGS)
+# Extra flags for every go build, vet and test, such as GO_BUILD_FLAGS=-trimpath.
+# Not GOFLAGS: the go command also reads that from the environment.
+GO_BUILD_FLAGS?=
 export CGO_ENABLED
-comma:=,
-empty:=
-space:=$(empty) $(empty)
-GO_BUILD_TAGS_NO_GOOLM:=$(subst $(space),$(comma),$(strip $(filter-out goolm,$(subst $(comma),$(space),$(GO_BUILD_TAGS)))))
-GO_BUILD_FLAGS_NO_GOOLM?=-tags $(GO_BUILD_TAGS_NO_GOOLM)
 
 # Go keeps its build and module caches where it always does; LOCAL_CACHE=1
 # keeps them in .cache/ in this checkout instead.
@@ -64,28 +58,6 @@ ifeq ($(LOCAL_CACHE),1)
 export GOCACHE:=$(CURDIR)/.cache/go-build
 export GOMODCACHE:=$(CURDIR)/.cache/go-mod
 endif
-
-# Patch MIPS LE ELF e_flags (offset 36) for NaN2008-only kernels (e.g. Ingenic X2600).
-#
-# Bytes (octal): \004 \024 \000 \160  →  little-endian 0x70001404
-#   0x70000000  EF_MIPS_ARCH_32R2   MIPS32 Release 2
-#   0x00001000  EF_MIPS_ABI_O32     O32 ABI
-#   0x00000400  EF_MIPS_NAN2008     IEEE 754-2008 NaN encoding
-#   0x00000004  EF_MIPS_CPIC        PIC calling sequence
-#
-# Go's GOMIPS=softfloat emits no FP instructions, so the NaN mode is irrelevant
-# at runtime — this is purely an ELF metadata fix to satisfy the kernel's check.
-# patchelf cannot modify e_flags; dd at a fixed offset is the most portable way.
-#
-# Ref: https://codebrowser.dev/linux/linux/arch/mips/include/asm/elf.h.html
-define PATCH_MIPS_FLAGS
-	@if [ -f "$(1)" ]; then \
-		printf '\004\024\000\160' | dd of="$(1)" bs=1 seek=36 count=4 conv=notrunc 2>/dev/null || \
-		{ echo "Error: failed to patch MIPS e_flags for $(1)"; exit 1; }; \
-	else \
-		echo "Error: $(1) not found, cannot patch MIPS e_flags"; exit 1; \
-	fi
-endef
 
 # Golangci-lint
 GOLANGCI_LINT?=golangci-lint
@@ -130,8 +102,6 @@ ifeq ($(UNAME_S),Linux)
 		ARCH=loong64
 	else ifeq ($(UNAME_M),riscv64)
 		ARCH=riscv64
-	else ifeq ($(UNAME_M),mipsel)
-		ARCH=mipsle
 	else
 		ARCH=$(UNAME_M)
 	endif
@@ -287,19 +257,11 @@ build-linux-arm64:
 	GOOS=linux GOARCH=arm64 $(GO) build $(GO_BUILD_FLAGS) -ldflags "$(LDFLAGS)" -o "$(BUILD_DIR)/$(KERNEL_NAME)-linux-arm64" ./$(CMD_DIR)
 	@echo "Build complete: $(BUILD_DIR)/$(KERNEL_NAME)-linux-arm64"
 
-## build-linux-mipsle: Build compa-kernel for Linux MIPS32 LE
-build-linux-mipsle:
-	@echo "Building for linux/mipsle (softfloat)..."
-	@mkdir -p "$(BUILD_DIR)"
-	GOOS=linux GOARCH=mipsle GOMIPS=softfloat $(GO) build $(GO_BUILD_FLAGS_NO_GOOLM) -ldflags "$(LDFLAGS)" -o "$(BUILD_DIR)/$(KERNEL_NAME)-linux-mipsle" ./$(CMD_DIR)
-	$(call PATCH_MIPS_FLAGS,$(BUILD_DIR)/$(KERNEL_NAME)-linux-mipsle)
-	@echo "Build complete: $(BUILD_DIR)/$(KERNEL_NAME)-linux-mipsle"
-
 ## build-android-arm64: Build compa-kernel for Android ARM64
 build-android-arm64:
 	@echo "Building for android/arm64..."
 	@mkdir -p "$(BUILD_DIR)"
-	GOOS=android GOARCH=arm64 $(GO) build -tags stdjson -ldflags "$(LDFLAGS)" -o "$(BUILD_DIR)/$(KERNEL_NAME)-android-arm64" ./$(CMD_DIR)
+	GOOS=android GOARCH=arm64 $(GO) build $(GO_BUILD_FLAGS) -ldflags "$(LDFLAGS)" -o "$(BUILD_DIR)/$(KERNEL_NAME)-android-arm64" ./$(CMD_DIR)
 	@echo "Build complete: $(BUILD_DIR)/$(KERNEL_NAME)-android-arm64"
 
 ## build-shell-android-arm64: Build compa, the web shell, for Android ARM64 with the UI compiled in
@@ -308,7 +270,7 @@ build-shell-android-arm64:
 	@cd web/frontend && pnpm run build:backend
 	@echo "Building $(SHELL_NAME) for android/arm64..."
 	@mkdir -p "$(BUILD_DIR)"
-	@cd web/backend && GOOS=android GOARCH=arm64 $(GO) build -tags stdjson -ldflags "$(LDFLAGS)" -o "../../$(BUILD_DIR)/$(SHELL_NAME)-android-arm64" .
+	@cd web/backend && GOOS=android GOARCH=arm64 $(GO) build $(GO_BUILD_FLAGS) -ldflags "$(LDFLAGS)" -o "../../$(BUILD_DIR)/$(SHELL_NAME)-android-arm64" .
 	@echo "Build complete: $(BUILD_DIR)/$(SHELL_NAME)-android-arm64"
 
 ## build-android-bundle: Build compa-kernel and compa for Android and package them as a universal zip
@@ -335,12 +297,9 @@ build-all:
 	GOOS=linux GOARCH=arm64 $(GO) build $(GO_BUILD_FLAGS) -ldflags "$(LDFLAGS)" -o "$(BUILD_DIR)/$(KERNEL_NAME)-linux-arm64" ./$(CMD_DIR)
 	GOOS=linux GOARCH=loong64 $(GO) build $(GO_BUILD_FLAGS) -ldflags "$(LDFLAGS)" -o "$(BUILD_DIR)/$(KERNEL_NAME)-linux-loong64" ./$(CMD_DIR)
 	GOOS=linux GOARCH=riscv64 $(GO) build $(GO_BUILD_FLAGS) -ldflags "$(LDFLAGS)" -o "$(BUILD_DIR)/$(KERNEL_NAME)-linux-riscv64" ./$(CMD_DIR)
-	GOOS=linux GOARCH=mipsle GOMIPS=softfloat $(GO) build $(GO_BUILD_FLAGS_NO_GOOLM) -ldflags "$(LDFLAGS)" -o "$(BUILD_DIR)/$(KERNEL_NAME)-linux-mipsle" ./$(CMD_DIR)
-	$(call PATCH_MIPS_FLAGS,$(BUILD_DIR)/$(KERNEL_NAME)-linux-mipsle)
 	GOOS=darwin GOARCH=arm64 $(GO) build $(GO_BUILD_FLAGS) -ldflags "$(LDFLAGS)" -o "$(BUILD_DIR)/$(KERNEL_NAME)-darwin-arm64" ./$(CMD_DIR)
 	GOOS=windows GOARCH=amd64 $(GO) build $(GO_BUILD_FLAGS) -ldflags "$(LDFLAGS)" -o "$(BUILD_DIR)/$(KERNEL_NAME)-windows-amd64.exe" ./$(CMD_DIR)
 	GOOS=netbsd GOARCH=amd64 $(GO) build $(GO_BUILD_FLAGS) -ldflags "$(LDFLAGS)" -o "$(BUILD_DIR)/$(KERNEL_NAME)-netbsd-amd64" ./$(CMD_DIR)
-	GOOS=netbsd GOARCH=arm64 $(GO) build $(GO_BUILD_FLAGS) -ldflags "$(LDFLAGS)" -o "$(BUILD_DIR)/$(KERNEL_NAME)-netbsd-arm64" ./$(CMD_DIR)
 	@echo "Core builds complete"
 
 ## install: Build compa and compa-kernel and install both into INSTALL_PREFIX/bin
@@ -452,7 +411,7 @@ help:
 	@echo "  COMPA_HOME        Compa's data folder, deleted by uninstall-all (default: ~/.compa)"
 	@echo "  CONFIRM=1         lets uninstall-all delete COMPA_HOME"
 	@echo "  VERSION           version stamped into the programs (default: git describe, without the leading v)"
-	@echo "  GO_BUILD_TAGS     Go build tags (default: goolm,stdjson)"
+	@echo "  GO_BUILD_FLAGS    extra flags for go build, vet and test"
 	@echo "  LOCAL_CACHE=1     keep Go's build and module caches in .cache/ in this checkout"
 	@echo ""
 	@echo "Current configuration:"

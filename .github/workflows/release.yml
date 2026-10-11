@@ -199,10 +199,10 @@ jobs:
           out="out/${GOOS}_${GOARCH}"
           mkdir -p "$out"
 
-          CGO_ENABLED=0 go build -trimpath -tags goolm,stdjson -ldflags "$ldflags" -o "$out/compa-kernel$ext" ./cmd/compa-kernel
+          CGO_ENABLED=0 go build -trimpath -ldflags "$ldflags" -o "$out/compa-kernel$ext" ./cmd/compa-kernel
           if [ "$GOOS" = darwin ]; then
             CGO_ENABLED=1 CC="clang -arch $CLANG_ARCH" MACOSX_DEPLOYMENT_TARGET=12.0 \
-              go build -trimpath -tags goolm,stdjson -ldflags "$ldflags" -o "$out/compa" ./web/backend
+              go build -trimpath -ldflags "$ldflags" -o "$out/compa" ./web/backend
             launcher_cgo=1
           else
             # On Windows compa is a GUI program: it lives in the tray, so no
@@ -210,7 +210,7 @@ jobs:
             # to the terminal it was started from.
             launcher_ldflags="$ldflags"
             if [ "$GOOS" = windows ]; then launcher_ldflags="$ldflags -H windowsgui"; fi
-            CGO_ENABLED=0 go build -trimpath -tags goolm,stdjson -ldflags "$launcher_ldflags" -o "$out/compa$ext" ./web/backend
+            CGO_ENABLED=0 go build -trimpath -ldflags "$launcher_ldflags" -o "$out/compa$ext" ./web/backend
             launcher_cgo=0
           fi
           # Without cgo a darwin compa silently falls back to running with no

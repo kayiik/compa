@@ -279,6 +279,26 @@ func TestEvolutionBridgeLearnsOnlyFromTheOwner(t *testing.T) {
 	}
 }
 
+// A config built in code with no workspace gets the default under the Compa
+// home, not the working directory.
+func TestBlankWorkspaceDefaultsToTheCompaHome(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv(config.EnvHome, home)
+	t.Chdir(t.TempDir())
+
+	cfg := &config.Config{}
+	al := NewAgentLoop(cfg, bus.NewMessageBus(), nil)
+	t.Cleanup(al.Close)
+
+	want := filepath.Join(home, "workspace")
+	if cfg.Agents.Defaults.Workspace != want {
+		t.Fatalf("workspace = %q, want %q", cfg.Agents.Defaults.Workspace, want)
+	}
+	if _, err := os.Stat("state"); !os.IsNotExist(err) {
+		t.Fatalf("the working directory got a state folder: %v", err)
+	}
+}
+
 func TestAgentWorkspaceExpandsWindowsStyleHome(t *testing.T) {
 	home, err := os.UserHomeDir()
 	if err != nil || home == "" {

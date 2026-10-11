@@ -5,9 +5,12 @@ package agent
 import (
 	"context"
 	"fmt"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/kayiik/compa/pkg"
 	"github.com/kayiik/compa/pkg/agent/interfaces"
 	"github.com/kayiik/compa/pkg/audio/tts"
 	"github.com/kayiik/compa/pkg/bus"
@@ -35,6 +38,13 @@ func NewAgentLoop(
 	provider providers.LLMProvider,
 	opts ...AgentLoopOption,
 ) *AgentLoop {
+	// A config built in code may leave the workspace blank. It gets the
+	// default LoadConfig gives it, ~/.compa/workspace, never the working
+	// directory.
+	if strings.TrimSpace(cfg.Agents.Defaults.Workspace) == "" {
+		cfg.Agents.Defaults.Workspace = filepath.Join(config.GetHome(), pkg.WorkspaceName)
+	}
+
 	// Turns of different sessions run in parallel, up to max_parallel_turns;
 	// a session's own turns always run one after another.
 	workerPoolSize := cfg.Agents.Defaults.MaxParallelTurns

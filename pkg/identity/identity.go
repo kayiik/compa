@@ -33,33 +33,21 @@ func ParseCanonicalID(canonical string) (platform, id string, ok bool) {
 
 // knownPlatforms are the channel types whose senders carry canonical IDs. Only
 // these names make an allow-list entry a "platform:id" entry: other text
-// before a colon belongs to the ID itself, as in the Matrix user ID
-// "@alice:matrix.org".
+// before a colon belongs to the ID itself.
 var knownPlatforms = map[string]struct{}{
-	"web": {}, "web_client": {}, "telegram": {}, "discord": {}, "feishu": {},
-	"weixin": {}, "wecom": {}, "dingtalk": {}, "slack": {}, "matrix": {},
-	"deltachat": {}, "line": {}, "onebot": {}, "qq": {}, "irc": {}, "vk": {},
-	"maixcam": {}, "whatsapp": {}, "whatsapp_native": {}, "teams_webhook": {},
-	"mqtt": {}, "slack_webhook": {},
-}
-
-// caseInsensitiveUsernames are the platforms whose usernames ignore case.
-var caseInsensitiveUsernames = map[string]struct{}{
-	"telegram": {}, "discord": {},
+	"web": {}, "web_client": {}, "slack": {}, "whatsapp": {},
+	"whatsapp_native": {}, "teams_webhook": {}, "slack_webhook": {},
 }
 
 // MatchAllowed checks whether the given sender matches a single allow-list entry:
 //
 //   - "123456"              → matches sender.PlatformID
-//   - "@alice"              → matches sender.Username (any case on Telegram and Discord)
-//   - "telegram:123456"     → exact match on sender.CanonicalID
-//   - "telegram:@alice"     → matches sender.Username on that platform
-//   - "@alice:matrix.org"   → matches the Matrix user ID
+//   - "@alice"              → matches sender.Username
+//   - "slack:U123456"       → exact match on sender.CanonicalID
+//   - "slack:@alice"        → matches sender.Username on that platform
 //
 // Only a known platform name (or the sender's own platform) before the first
-// colon makes an entry canonical. On DeltaChat, whose senders are email
-// addresses, "@name" matches only a full address, so "@alice" never admits
-// alice@ at some other domain.
+// colon makes an entry canonical.
 func MatchAllowed(sender bus.SenderInfo, allowed string) bool {
 	allowed = strings.TrimSpace(allowed)
 	if allowed == "" {
@@ -85,8 +73,7 @@ func MatchAllowed(sender bus.SenderInfo, allowed string) bool {
 	// Keep track of explicit username format
 	name, isAtUsername := strings.CutPrefix(allowed, "@")
 
-	// Match against PlatformID: the entry as written (a Matrix user ID keeps
-	// its "@"), or without its "@".
+	// Match against PlatformID: the entry as written, or without its "@".
 	if sender.PlatformID != "" && (platformIDMatches(sender, allowed) || platformIDMatches(sender, name)) {
 		return true
 	}
@@ -108,42 +95,19 @@ func isPlatform(prefix, senderPlatform string) bool {
 	return senderPlatform != "" && strings.EqualFold(p, strings.TrimSpace(senderPlatform))
 }
 
-// platformIDMatches compares id with the sender's platform ID. DeltaChat
-// addresses ignore case.
+// platformIDMatches compares id with the sender's platform ID.
 func platformIDMatches(sender bus.SenderInfo, id string) bool {
-	if sender.PlatformID == "" || id == "" {
-		return false
-	}
-	if isPlatformNamed(sender.Platform, "deltachat") {
-		return strings.EqualFold(sender.PlatformID, id)
-	}
-	return sender.PlatformID == id
+	return sender.PlatformID != "" && id != "" && sender.PlatformID == id
 }
 
 // usernameMatches compares an "@name" entry, without its "@", with the
 // sender's username.
 func usernameMatches(sender bus.SenderInfo, name string) bool {
-	if isPlatformNamed(sender.Platform, "deltachat") {
-		// The username of a DeltaChat sender may be only the local part of
-		// the address; only the full address identifies the sender.
-		return strings.Contains(name, "@") && platformIDMatches(sender, name)
-	}
 	username := strings.TrimPrefix(sender.Username, "@")
-	if username == "" {
-		return false
-	}
-	if _, ok := caseInsensitiveUsernames[strings.ToLower(strings.TrimSpace(sender.Platform))]; ok {
-		return strings.EqualFold(username, name)
-	}
-	return username == name
+	return username != "" && username == name
 }
 
-func isPlatformNamed(platform, name string) bool {
-	return strings.EqualFold(strings.TrimSpace(platform), name)
-}
-
-// isNumeric returns true if s consists entirely of digits, allowing for an optional leading minus sign
-// (required for Telegram group/channel IDs like -1001234567890).
+// isNumeric returns true if s consists entirely of digits, allowing for an optional leading minus sign.
 func isNumeric(s string) bool {
 	if s == "" {
 		return false

@@ -297,15 +297,6 @@ func TestConfiguredStreamingEligibilityGates(t *testing.T) {
 			wantStreamCalls:   1,
 		},
 		{
-			name:              "wecom channel and model enabled streams",
-			channel:           "wecom",
-			channelStreaming:  true,
-			modelStreaming:    true,
-			streamingProvider: true,
-			streamDelegate:    true,
-			wantStreamCalls:   1,
-		},
-		{
 			name:              "channel disabled uses chat",
 			channel:           "web",
 			modelStreaming:    true,
@@ -1084,8 +1075,7 @@ func newConfiguredStreamingTestConfig(
 			},
 		},
 		Channels: config.ChannelsConfig{
-			"web":   newConfiguredStreamingWebChannel(t, channelStreaming),
-			"wecom": newConfiguredStreamingWeComChannel(t, channelStreaming),
+			"web": newConfiguredStreamingWebChannel(t, channelStreaming),
 		},
 	}
 	addConfiguredStreamingInstance(cfg, "main", config.ProviderInstanceRuntime{Streaming: &modelStreaming})
@@ -1138,27 +1128,6 @@ func newConfiguredStreamingLoop(
 		}),
 	).Resolve
 	return NewAgentLoop(cfg, msgBus, nil, WithModelResolver(resolve))
-}
-
-func newConfiguredStreamingWeComChannel(t *testing.T, enabled bool) *config.Channel {
-	t.Helper()
-	settings := config.WeComSettings{
-		BotID: "bot-1",
-		Streaming: config.StreamingConfig{
-			Enabled:         enabled,
-			ThrottleSeconds: 1,
-			MinGrowthChars:  40,
-		},
-	}
-	raw, err := json.Marshal(settings)
-	if err != nil {
-		t.Fatalf("Marshal settings error = %v", err)
-	}
-	return &config.Channel{
-		Type:     config.ChannelWeCom,
-		Enabled:  true,
-		Settings: config.RawNode(raw),
-	}
 }
 
 func newConfiguredStreamingWebChannel(t *testing.T, enabled bool) *config.Channel {
