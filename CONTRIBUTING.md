@@ -19,6 +19,25 @@ shows: `compa` embeds `web/backend/dist` when it links, and a stale or missing
 UI there isn't reported. `make product` builds both programs into `build/`;
 `make help` lists the other targets.
 
+## Run without building the programs
+
+`go run` starts both programs from the source. Give them a data folder of their
+own with `COMPA_HOME`, so they leave the `~/.compa` of an installed Compa alone,
+and start the kernel first: run this way, `compa` has no `compa-kernel` beside it
+and uses the one already running for that home. The web UI is the one in
+`web/backend/dist`; build it once with `pnpm run build:backend` in
+`web/frontend`.
+
+```sh
+export COMPA_HOME=/tmp/compa-dev           # PowerShell: $env:COMPA_HOME = "$env:TEMP\compa-dev"
+go run ./cmd/compa-kernel onboard
+go run ./cmd/compa-kernel gateway -E       # in one terminal
+go run ./web/backend -console -no-browser  # in another
+```
+
+Open the setup link `compa` prints, at http://localhost:18800. Stop both with
+Ctrl+C.
+
 ## Test
 
 ```sh

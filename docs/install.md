@@ -139,6 +139,30 @@ http://127.0.0.1:18800:
 ssh -L 18800:127.0.0.1:18800 you@the-computer-running-compa
 ```
 
+## Run in a container
+
+Each release also publishes the image `ghcr.io/kayiik/compa`, for linux/amd64
+and linux/arm64. It runs `compa` as a non-root user, listening on all
+addresses on port 18800, with its data in `/data`. Compa listens beyond this
+computer only once a dashboard password is set, so set one first:
+
+```sh
+docker run --rm -it -v compa-data:/data ghcr.io/kayiik/compa -password -
+docker run -d --name compa -p 18800:18800 -v compa-data:/data ghcr.io/kayiik/compa
+```
+
+In a script, pipe the password in: `printf '%s\n' "$PASSWORD" | docker run
+--rm -i -v compa-data:/data ghcr.io/kayiik/compa -password -`.
+
+Then open http://localhost:18800 on that computer. Compa answers only the
+names it knows, so add every other name or address you reach it by, such as
+the computer's address or a reverse proxy's host name, to **Config** → **Compa
+app** → **Allowed Hosts**, or to `allowed_hosts` in `/data/launcher-config.json`.
+The container runs as uid 10001: a named volume works as it is, while a host
+folder mounted at `/data` must belong to that uid (`chown 10001:10001`).
+Update by pulling the new image and starting the container again;
+`compa-kernel update` doesn't apply to an image.
+
 ## Run from source
 
 You need Go 1.26.9, Node.js 22.13 or later, and pnpm. From the repository
