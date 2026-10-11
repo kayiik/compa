@@ -4,13 +4,16 @@
 # ci.yml, builds compa and compa-kernel for six platforms, packages one archive
 # per platform with SHA256SUMS and both installers, attests their build
 # provenance, stages them on a draft release, checks the digest of every
-# uploaded asset, and publishes it. Then:
+# uploaded asset, pushes the container image ghcr.io/kayiik/compa for
+# linux/amd64 and linux/arm64, and publishes the release. Then:
 #
 #   irm https://github.com/kayiik/compa/releases/latest/download/install.ps1 | iex
 #   curl -fsSL https://github.com/kayiik/compa/releases/latest/download/install.sh | sh
+#   docker pull ghcr.io/kayiik/compa
 #
 # Running it by hand (workflow_dispatch) is a dry run: it builds and packages
-# everything as a workflow artifact and never touches releases.
+# everything as workflow artifacts, builds the image without pushing it, and
+# never touches releases or the registry.
 name: release
 
 on:
@@ -444,10 +447,81 @@ jobs:
           diff -u "$local_manifest" "$remote_manifest"
           echo "release_id=$release_id" >> "$GITHUB_OUTPUT"
 
+  # The container image, from the linux programs the build job made. A dry run
+  # builds it for both platforms and pushes nothing; a tag pushes it, and the
+  # release is published only after it.
+  image:
+    name: container image
+    needs: [validate, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    env:
+      IMAGE: ghcr.io/${{ github.repository }}
+      PUSH: ${{ github.event_name == 'push' && github.ref_type == 'tag' }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: bin-linux-amd64
+          path: bin/linux_amd64
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: bin-linux-arm64
+          path: bin/linux_arm64
+
+      # The arm64 image installs its packages under emulation.
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+        with:
+          platforms: arm64
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - if: env.PUSH == 'true'
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - id: push
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: docker/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: ${{ env.PUSH == 'true' }}
+          provenance: false
+          tags: |
+            ${{ env.IMAGE }}:${{ needs.validate.outputs.version }}
+            ${{ env.IMAGE }}:latest
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.version=${{ needs.validate.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.licenses=MIT
+            org.opencontainers.image.description=Compa, a personal AI assistant: the web UI on port 18800, data in /data
+
+      # Check one with: gh attestation verify oci://ghcr.io/kayiik/compa:<version> --repo kayiik/compa
+      - if: env.PUSH == 'true'
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+
   release-publish:
     name: publish GitHub release
     if: github.event_name == 'push' && github.ref_type == 'tag'
-    needs: [validate, release-stage]
+    needs: [validate, release-stage, image]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

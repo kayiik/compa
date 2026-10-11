@@ -139,6 +139,23 @@ http://127.0.0.1:18800:
 ssh -L 18800:127.0.0.1:18800 you@the-computer-running-compa
 ```
 
+## Run in a container
+
+Each release also publishes the image `ghcr.io/kayiik/compa`, for linux/amd64
+and linux/arm64. It runs `compa` as a non-root user, listening on all
+addresses on port 18800, with its data in `/data`. Compa listens beyond this
+computer only once a dashboard password is set, so set one first:
+
+```sh
+docker run --rm -i -v compa-data:/data ghcr.io/kayiik/compa -password -
+docker run -d --name compa -p 18800:18800 -v compa-data:/data ghcr.io/kayiik/compa
+```
+
+Then open http://localhost:18800. Behind a reverse proxy, add its host name
+to **Config** → **Compa app** → **Allowed Hosts**. Update by pulling the new
+image and starting the container again; `compa-kernel update` doesn't apply
+to an image.
+
 ## Run from source
 
 You need Go 1.26.9, Node.js 22.13 or later, and pnpm. From the repository
