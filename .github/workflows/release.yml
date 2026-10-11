@@ -448,11 +448,16 @@ jobs:
           echo "release_id=$release_id" >> "$GITHUB_OUTPUT"
 
   # The container image, from the linux programs the build job made. A dry run
-  # builds it for both platforms and pushes nothing; a tag pushes it, and the
-  # release is published only after it.
+  # builds it for both platforms and pushes nothing; a tag pushes it only once
+  # the draft release holds this build, and the release is published after it.
   image:
     name: container image
-    needs: [validate, build]
+    needs: [validate, build, release-stage]
+    # release-stage is skipped in a dry run, which builds the image anyway.
+    if: >-
+      always() && needs.build.result == 'success' &&
+      (needs.release-stage.result == 'success' ||
+      (github.event_name == 'workflow_dispatch' && needs.release-stage.result == 'skipped'))
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:

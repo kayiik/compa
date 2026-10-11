@@ -8,11 +8,11 @@
 #
 # Compa listens on all addresses here, which it does only once a dashboard
 # password is set, so set one first:
-#   docker run --rm -i -v compa-data:/data ghcr.io/kayiik/compa -password -
+#   docker run --rm -it -v compa-data:/data ghcr.io/kayiik/compa -password -
 #   docker run -d -p 18800:18800 -v compa-data:/data ghcr.io/kayiik/compa
 FROM debian:stable-slim
 RUN apt-get update \
-	&& apt-get install -y --no-install-recommends ca-certificates curl sqlite3 \
+	&& apt-get install -y --no-install-recommends ca-certificates curl sqlite3 tini \
 	&& rm -rf /var/lib/apt/lists/* \
 	&& useradd --system --uid 10001 --user-group --home-dir /data --no-create-home compa \
 	&& mkdir /data && chown compa:compa /data
@@ -23,5 +23,6 @@ ENV COMPA_HOME=/data
 VOLUME /data
 USER compa
 EXPOSE 18800
-ENTRYPOINT ["compa"]
+# tini reaps the gateway and the programs tools start, as PID 1 does not.
+ENTRYPOINT ["tini", "--", "compa"]
 CMD ["-console", "-no-browser", "-host", "0.0.0.0", "-port", "18800"]
