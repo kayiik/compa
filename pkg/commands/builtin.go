@@ -21,5 +21,6 @@ func BuiltinDefinitions() []Definition {
 		reloadCommand(),
 		approveCommand(),
 		denyCommand(),
+		cancelCommand(),
 	}
 }

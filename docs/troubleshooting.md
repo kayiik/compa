@@ -103,6 +103,19 @@ When [`tools.approval`](use.md#approvals) asks about a call:
   `module-invoke` don't post requests either: there, **Approve and run** or
   `--approve` is the approval.
 
+## A question doesn't arrive, or your answer isn't taken
+
+When the agent [asks you questions](use.md#questions):
+
+- A process hook with `intercept: ["answer_question"]` may answer first, and
+  then nothing is posted.
+- It is asked where an approval would be; a scheduled job's question goes to
+  the chat you last wrote to Compa from, and with none the agent is told it
+  can't ask.
+- Only your next message in that chat answers it, and only while it waits
+  (30 minutes). A reply that doesn't fit gets a hint; answer again or
+  `/cancel`.
+
 ## A channel doesn't answer
 
 - Compa answers only direct messages from the accounts in the channel's

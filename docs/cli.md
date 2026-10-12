@@ -99,6 +99,10 @@ the terminal; its calls have the origin `cli`. With `-m` the terminal can't
 ask, so a call the policy asks about is refused unless an approver hook
 decides it.
 
+The agent's [questions](use.md#questions) show in the terminal too, as a
+numbered list; the next line you type answers, or `/cancel`. With `-m` there
+is nobody to ask, and the agent is told so.
+
 With `--events`, stdout is one JSON object per line, as the turn goes on: the
 answer being written as `{"type":"delta","text":"…"}` (`segment` starts a new
 model call and `reset` says the provider revised the text so far), each tool

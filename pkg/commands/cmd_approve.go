@@ -22,3 +22,14 @@ func denyCommand() Definition {
 		Usage:       "/deny <id>",
 	}
 }
+
+// /cancel cancels a question Compa asked with choices (the ask_user tool) and
+// is waiting on in the chat. Like /approve, the agent acts on it as soon as it
+// arrives.
+func cancelCommand() Definition {
+	return Definition{
+		Name:        "cancel",
+		Description: "Cancel a question Compa is waiting on",
+		Usage:       "/cancel",
+	}
+}

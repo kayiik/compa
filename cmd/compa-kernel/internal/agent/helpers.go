@@ -135,6 +135,7 @@ func startTerminalChat(agentLoop *agent.AgentLoop, msgBus *bus.MessageBus, sessi
 	chat := newTerminalChat(func(input string) (string, error) {
 		return agentLoop.ProcessDirect(context.Background(), input, sessionKey)
 	}, out)
+	chat.questionWaiting = func() bool { return agentLoop.QuestionWaiting(cliChannel, "direct") }
 	go chat.printPosted(context.Background(), msgBus.OutboundChan())
 	agentLoop.SetTerminalChat(true)
 	return chat

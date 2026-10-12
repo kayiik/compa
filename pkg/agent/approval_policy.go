@@ -106,8 +106,12 @@ func (al *AgentLoop) authorizeToolCall(
 // askApplies reports whether an ask covers the call. exec's list, poll,
 // read and kill only look at or stop a process that an allowed or approved
 // run started, and are not asked about. write and send-keys are: input sent
-// to a process, a shell for one, runs things in it.
+// to a process, a shell for one, runs things in it. ask_user only asks the
+// owner: asking first to ask would be pointless.
 func askApplies(toolName string, args map[string]any) bool {
+	if toolName == askUserToolName {
+		return false
+	}
 	if toolName != "exec" {
 		return true
 	}

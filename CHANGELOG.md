@@ -7,6 +7,11 @@ Notable changes to Compa, newest first. Versions follow
 
 ### Added
 
+- The agent can ask you questions with choices (the `ask_user` tool) and wait
+  for your answer: the web chat shows the options (new `question.*` frames),
+  other chats a numbered list you answer with option numbers, your own words or
+  `/cancel`; an `answer_question` hook can answer for you. See
+  [Questions](docs/use.md#questions).
 - `compa-kernel model instances`, `add`, `update`, `remove`, `sync`,
   `catalogs` and `models` manage provider instances and their catalogs from
   the command line, with `--json`, as the Models page does; the API key is

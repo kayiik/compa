@@ -85,6 +85,8 @@ You send:
 | `type` | Fields |
 |---|---|
 | `message.send` | `id`: your id for the message. `payload.content`: the text. `payload.media`: images as `data:image/...;base64,` URLs: JPEG, PNG, GIF, WebP or BMP, 20 MiB each at most. `payload.selection`: the model for this message, `instance-id/model-id` or a route's name. `payload.module`: a module to use. `session_id`: a session other than the socket's. |
+| `question.answer` | `id`: your id for the frame. `payload.question_id`: the question. `payload.answers`: one `{"selected": [labels], "text": "..."}` per question, in order; each chooses option labels (one, unless the question is `multiple`), says something in `text`, or both. |
+| `question.cancel` | `id` and `payload.question_id`: cancels the question. |
 | `ping` | `id`, which the `pong` repeats. |
 
 You get, with the `session_id` they belong to (except `error` and `pong`):
@@ -96,8 +98,10 @@ You get, with the `session_id` they belong to (except `error` and `pong`):
 | `message.update` | `message_id` and what changed. `content` is the whole text, not an addition. |
 | `message.delete` | `message_id`. |
 | `typing.start`, `typing.stop` | Nothing. Typing can stop before the turn ends. |
+| `question.create` | `question_id`, `expires_at` (Unix milliseconds) and `questions`: each with `header`, `question`, `multiple` (when several options may be chosen) and `options`, each with `label`, `description` and `recommended` (on at most one). |
+| `question.resolved` | `question_id` and `outcome`: `answered`, `cancelled`, `expired` or `ended` (the turn ended first). |
 | `turn.end` | `request_id`, `request_ids`, `status` (`completed`, `error` or `aborted`) and, for an error, `error`. |
-| `error` | `code`, `message`, and `request_id` when it's about a `message.send`. `invalid_media` and `empty_content` refuse that message; `invalid_message` and `unknown_type` refuse a frame that isn't one. |
+| `error` | `code`, `message`, and `request_id` when it's about a `message.send`. `invalid_media` and `empty_content` refuse that message; `invalid_message` and `unknown_type` refuse a frame that isn't one. `invalid_answer`, `question_not_waiting` and `forbidden` refuse a `question.answer` or `question.cancel`, with its `id` as `request_id`. |
 | `pong` | The `id` of your `ping`. |
 
 A turn is Compa answering: `turn.start` comes before its reply and `turn.end`
@@ -105,6 +109,17 @@ after all of it. A message sent while a turn runs joins it, or gets a turn of
 its own right after. Either way, your message is answered once a `turn.end`
 lists its `id` in `request_ids`. A command such as `/help` is answered without
 a turn, with `message.create` alone.
+
+When the agent [asks you questions](use.md#questions), the session gets a
+`question.create` instead of a text message, while its turn waits. Show the
+options, and a field for the person's own words; send `question.answer` or
+`question.cancel`. A wrong answer gets an `error` and the question keeps
+waiting. Every socket of the session gets `question.resolved` when the
+question stops waiting, however it ended: drop it then. A socket that opens the
+session while a question waits gets its `question.create` again, with the same
+`question_id`. A `message.send` also answers it, as text: option numbers or
+words, as in a chat app. These frames are additions to the protocol, so the
+gateway protocol version doesn't change.
 
 ### Files
 

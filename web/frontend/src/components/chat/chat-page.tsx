@@ -23,6 +23,7 @@ import {
 import { ChatEmptyState } from "@/components/chat/chat-empty-state"
 import { ModelSelector } from "@/components/chat/model-selector"
 import { ModuleSelector, NO_MODULE } from "@/components/chat/module-selector"
+import { QuestionCard } from "@/components/chat/question-card"
 import { SessionHistoryMenu } from "@/components/chat/session-history-menu"
 import { TypingIndicator } from "@/components/chat/typing-indicator"
 import { UserMessage } from "@/components/chat/user-message"
@@ -228,6 +229,9 @@ export function ChatPage() {
     activeSessionId,
     contextUsage,
     failedDraft,
+    questions,
+    answerQuestion,
+    cancelQuestion,
     sendMessage,
     sendVoiceMessage,
     selection,
@@ -847,6 +851,15 @@ export function ChatPage() {
               />
             ) : null,
           )}
+
+          {questions.map((question) => (
+            <QuestionCard
+              key={question.questionId}
+              question={question}
+              onAnswer={answerQuestion}
+              onCancel={cancelQuestion}
+            />
+          ))}
 
           {isTyping && <TypingIndicator />}
         </div>

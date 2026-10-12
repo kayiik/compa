@@ -157,6 +157,12 @@ func (al *AgentLoop) processMessage(ctx context.Context, msg bus.InboundMessage)
 		}
 	}
 
+	// The owner's answer to a question waiting in the chat, as the terminal
+	// sends it while the asking turn waits.
+	if response, handled := al.questionReply(ctx, msg); handled {
+		return response, nil
+	}
+
 	// context-dependent commands check their own Runtime fields and report
 	// "unavailable" when the required capability is nil.
 	if response, handled := al.handleCommand(ctx, msg, agent, &opts); handled {

@@ -104,6 +104,18 @@
     },
     "newChat": "New Chat",
     "notConnected": "The gateway isn't running. Start it from the status menu to chat.",
+    "question": {
+      "title_one": "{{count}} question for you",
+      "title_other": "{{count}} questions for you",
+      "chooseOne": "Choose one",
+      "chooseMany": "Choose any that apply",
+      "recommended": "Recommended",
+      "other": "Or type your own answer",
+      "otherPlaceholder": "Your answer",
+      "submit": "Submit",
+      "cancel": "Cancel",
+      "expired": "This question has expired."
+    },
     "thinking": {
       "step1": "Thinking..."
     },

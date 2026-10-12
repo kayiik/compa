@@ -125,6 +125,31 @@ capability with an unknown cost, network access or external writes, goes to
 the `agent.ToolApprover` hooks you mount with
 `loop.MountHook(agent.NamedHook(name, hook))`; with none, it is refused.
 
+The agent can also ask questions with choices, with the `ask_user` tool (see
+[Questions](use.md#questions)). Your program answers them with an
+`agent.QuestionAnswerer` hook:
+
+```go
+type QuestionAnswerer interface {
+	AnswerQuestion(ctx context.Context, req *agent.QuestionRequest) (agent.QuestionDecision, error)
+}
+```
+
+`req.Questions` holds the `bus.Question`s (`Header`, `Question`, `Options`
+with `Label`, `Description` and `Recommended`, and `Multiple`). Return
+`agent.QuestionDecision{Action: agent.QuestionActionAnswer, Answers: ...}`
+with one `bus.QuestionAnswer{Selected: labels, Text: words}` per question;
+`agent.QuestionActionCancel`, with a `Reason`, to cancel; or
+`agent.QuestionActionPass` to leave them to the next answerer and at last to
+the owner in chat. Answerers are asked in hook order; the first that answers
+or cancels decides. One that fails, times out (`hooks.defaults.approval_timeout_ms`,
+60 seconds by default) or answers what doesn't fit the questions is passed
+over. With nobody to ask, the model is told so. A process hook answers with
+`intercept: ["answer_question"]`: it gets `hook.answer_question` with the
+request as JSON and returns `{"action": "answer", "answers": [{"selected":
+["Blue"]}]}`, `{"action": "cancel", "reason": "..."}` or `{"action": "pass"}`.
+The events `question.requested` and `question.resolved` report each ask.
+
 ## Your own tools
 
 A tool is four methods: `Name`, `Description`, `Parameters` (a JSON Schema)

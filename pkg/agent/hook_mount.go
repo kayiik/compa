@@ -324,6 +324,8 @@ func processHookOptionsFromConfig(spec config.ProcessHookConfig) (ProcessHookOpt
 			opts.InterceptTool = true
 		case "approve_tool":
 			opts.ApproveTool = true
+		case "answer_question":
+			opts.AnswerQuestion = true
 		case "":
 			continue
 		default:
@@ -331,7 +333,7 @@ func processHookOptionsFromConfig(spec config.ProcessHookConfig) (ProcessHookOpt
 		}
 	}
 
-	if !opts.Observe && !opts.InterceptLLM && !opts.InterceptTool && !opts.ApproveTool {
+	if !opts.Observe && !opts.InterceptLLM && !opts.InterceptTool && !opts.ApproveTool && !opts.AnswerQuestion {
 		return ProcessHookOptions{}, fmt.Errorf("no hook modes enabled")
 	}
 

@@ -60,8 +60,10 @@ func NewAgentLoop(
 		steering:          newSteeringQueue(parseSteeringMode(cfg.Agents.Defaults.SteeringMode)),
 		workerSem:         make(chan struct{}, workerPoolSize),
 		ownsRuntimeEvents: true,
-		approvals:         newOwnerApprovals(),
 	}
+	prompts := newOperatorPrompts()
+	al.approvals = newOwnerApprovals(prompts)
+	al.questions = newOwnerQuestions(prompts)
 	al.lifetime, al.endLifetime = context.WithCancel(context.Background())
 	for _, opt := range opts {
 		if opt != nil {
@@ -382,6 +384,10 @@ func registerSharedTools(
 			})
 			agent.Tools.Register(delegateTool)
 		}
+
+		// Questions to the owner, with choices. The approval policy can hide
+		// or deny it like any tool.
+		agent.Tools.Register(newAskUserTool(al))
 
 		// Inside a Compita turn, peers are reachable through the Compa host.
 		if peerTool := tools.NewMessagePeerToolFromEnv(); peerTool != nil {

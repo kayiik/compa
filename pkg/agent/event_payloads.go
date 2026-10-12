@@ -1,6 +1,10 @@
 package agent
 
-import "time"
+import (
+	"time"
+
+	"github.com/kayiik/compa/pkg/bus"
+)
 
 // TurnEndStatus describes the terminal state of a turn.
 type TurnEndStatus string
@@ -235,4 +239,22 @@ type ApprovalResolvedPayload struct {
 	Resolution string `json:"resolution"` // "approved", "rejected", "cancelled"
 	// Reason tells why a call that was not approved may not run.
 	Reason string `json:"reason,omitempty"`
+}
+
+// QuestionRequestedPayload describes questions the agent asks the owner with
+// the ask_user tool.
+type QuestionRequestedPayload struct {
+	// QuestionID pairs the request with its QuestionResolvedPayload.
+	QuestionID string         `json:"question_id"`
+	Questions  []bus.Question `json:"questions"`
+}
+
+// QuestionResolvedPayload describes how the questions ended.
+type QuestionResolvedPayload struct {
+	QuestionID string `json:"question_id"`
+	// Outcome is answered, cancelled, expired or ended (the turn ended
+	// first); unavailable when nobody could be asked.
+	Outcome string `json:"outcome"`
+	// By is who answered or cancelled: owner, or hook:<name>.
+	By string `json:"by,omitempty"`
 }

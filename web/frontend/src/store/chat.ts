@@ -83,6 +83,36 @@ export interface FailedDraft {
   attachments?: ChatAttachment[]
 }
 
+export interface ChatQuestionOption {
+  label: string
+  description: string
+  recommended?: boolean
+}
+
+export interface ChatQuestionItem {
+  header: string
+  question: string
+  options: ChatQuestionOption[]
+  multiple?: boolean
+}
+
+/** A question.create the agent is waiting on. */
+export interface PendingQuestion {
+  questionId: string
+  /** Unix milliseconds. */
+  expiresAt: number
+  questions: ChatQuestionItem[]
+  /** The id of the last question.answer or question.cancel sent for it. */
+  requestId?: string
+  /** The server's refusal of that frame. */
+  error?: string
+}
+
+export interface ChatAnswer {
+  selected: string[]
+  text: string
+}
+
 export interface ChatStoreState {
   messages: ChatMessage[]
   connectionState: ConnectionState
@@ -100,6 +130,8 @@ export interface ChatStoreState {
   selectionBySession: Record<string, string>
   /** Text to put back in the composer, set until the chat page takes it. */
   failedDraft?: FailedDraft
+  /** Questions waiting on an answer, per session, in arrival order. */
+  questionsBySession: Record<string, PendingQuestion[]>
 }
 
 type ChatStorePatch = Partial<ChatStoreState>
@@ -112,6 +144,7 @@ const DEFAULT_CHAT_STATE: ChatStoreState = {
   activeSessionId: getInitialActiveSessionId(),
   hasHydratedActiveSession: false,
   selectionBySession: {},
+  questionsBySession: {},
 }
 
 export const chatAtom = atom<ChatStoreState>(DEFAULT_CHAT_STATE)
@@ -144,6 +177,67 @@ export function updateChatStore(
 
     return next
   })
+}
+
+/** Adds a question, or replaces one re-sent with the same id. */
+export function upsertQuestion(sessionId: string, question: PendingQuestion) {
+  updateChatStore((prev) => {
+    const list = prev.questionsBySession[sessionId] ?? []
+    const index = list.findIndex((q) => q.questionId === question.questionId)
+    const next =
+      index >= 0
+        ? list.map((q, i) =>
+            i === index ? { ...question, requestId: q.requestId } : q,
+          )
+        : [...list, question]
+    return {
+      questionsBySession: { ...prev.questionsBySession, [sessionId]: next },
+    }
+  })
+}
+
+export function removeQuestion(sessionId: string, questionId: string) {
+  updateChatStore((prev) => {
+    const list = prev.questionsBySession[sessionId]
+    if (!list) return {}
+    const questionsBySession = { ...prev.questionsBySession }
+    const next = list.filter((q) => q.questionId !== questionId)
+    if (next.length > 0) questionsBySession[sessionId] = next
+    else delete questionsBySession[sessionId]
+    return { questionsBySession }
+  })
+}
+
+export function patchQuestion(
+  sessionId: string,
+  questionId: string,
+  patch: Partial<PendingQuestion>,
+) {
+  updateChatStore((prev) => {
+    const list = prev.questionsBySession[sessionId]
+    if (!list) return {}
+    return {
+      questionsBySession: {
+        ...prev.questionsBySession,
+        [sessionId]: list.map((q) =>
+          q.questionId === questionId ? { ...q, ...patch } : q,
+        ),
+      },
+    }
+  })
+}
+
+/** Finds the session and question a request id was sent for. */
+export function findQuestionByRequest(
+  requestId: string,
+): { sessionId: string; question: PendingQuestion } | undefined {
+  for (const [sessionId, list] of Object.entries(
+    getChatState().questionsBySession,
+  )) {
+    const question = list.find((q) => q.requestId === requestId)
+    if (question) return { sessionId, question }
+  }
+  return undefined
 }
 
 export function clearFailedDraft() {

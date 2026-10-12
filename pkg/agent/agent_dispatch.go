@@ -48,6 +48,11 @@ func (al *AgentLoop) dispatchInbound(ctx context.Context, msg bus.InboundMessage
 	if al.handleApprovalReply(ctx, msg, sessionKey) {
 		return
 	}
+	// So does the owner's answer to a question (ask_user) waiting in the
+	// chat: it is not a new message, and must not queue behind that turn.
+	if al.handleQuestionReply(ctx, msg, sessionKey) {
+		return
+	}
 
 	if al.intake.busy(sessionKey) {
 		// An earlier message of this session is still being transcribed:

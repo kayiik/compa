@@ -104,6 +104,20 @@
     },
     "newChat": "Nový chat",
     "notConnected": "Gateway není spuštěna. Spusťte ji pro zahájení chatu.",
+    "question": {
+      "title_one": "{{count}} otázka pro vás",
+      "title_other": "{{count}} otázek pro vás",
+      "title_few": "{{count}} otázky pro vás",
+      "title_many": "{{count}} otázky pro vás",
+      "chooseOne": "Vyberte jednu možnost",
+      "chooseMany": "Vyberte všechny vhodné",
+      "recommended": "Doporučeno",
+      "other": "Nebo napište vlastní odpověď",
+      "otherPlaceholder": "Vaše odpověď",
+      "submit": "Odeslat",
+      "cancel": "Zrušit",
+      "expired": "Platnost této otázky vypršela."
+    },
     "thinking": {
       "step1": "Přemýšlím..."
     },

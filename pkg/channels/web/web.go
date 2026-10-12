@@ -112,6 +112,14 @@ type WebChannel struct {
 	// sessionHistory reads the sessions /web/sessions serves; nil until the
 	// channel manager sets it.
 	sessionHistory atomic.Pointer[func() history.Reader]
+
+	// questions are the agent's questions waiting in each chat (chatID ->
+	// question id), resent to a socket that joins.
+	questionsMu sync.Mutex
+	questions   map[string]map[string]webQuestion
+	// allowSenderFn lets tests refuse a sender. nil → IsAllowedSender, which
+	// admits everyone holding the token: the web chat's owner.
+	allowSenderFn func(bus.SenderInfo) bool
 }
 
 // NewWebChannel creates a new web chat channel.
@@ -1133,6 +1141,7 @@ func (c *WebChannel) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		"session_id": sessionID,
 	})
 
+	c.resendQuestions(pc)
 	go c.readLoop(pc)
 }
 
@@ -1283,6 +1292,12 @@ func (c *WebChannel) handleMessage(pc *webConn, msg WebMessage) {
 
 	case TypeMediaSend:
 		c.handleMessageSend(pc, msg)
+
+	case TypeQuestionAnswer:
+		c.handleQuestionAnswer(pc, msg, false)
+
+	case TypeQuestionCancel:
+		c.handleQuestionAnswer(pc, msg, true)
 
 	default:
 		errMsg := newError("unknown_type", fmt.Sprintf("unknown message type: %s", msg.Type))

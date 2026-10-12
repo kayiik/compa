@@ -20,8 +20,10 @@ import {
 import { invalidateSocket, isCurrentSocket } from "@/features/chat/websocket"
 import i18n from "@/i18n"
 import {
+  type ChatAnswer,
   type ChatAttachment,
   getChatState,
+  patchQuestion,
   setChatSelection,
   updateChatStore,
 } from "@/store/chat"
@@ -567,6 +569,41 @@ export function sendChatMessage({
     }))
     return false
   }
+}
+
+function sendQuestionFrame(
+  type: "question.answer" | "question.cancel",
+  questionId: string,
+  payload: Record<string, unknown>,
+) {
+  if (!wsRef || wsRef.readyState !== WebSocket.OPEN) {
+    console.warn("WebSocket not connected")
+    return false
+  }
+  const sessionId = activeSessionIdRef
+  const id = `q-${++msgIdCounter}-${Date.now()}`
+  patchQuestion(sessionId, questionId, { requestId: id, error: undefined })
+  try {
+    wsRef.send(
+      JSON.stringify({
+        type,
+        id,
+        payload: { question_id: questionId, ...payload },
+      }),
+    )
+    return true
+  } catch (error) {
+    console.error(`Failed to send ${type}:`, error)
+    return false
+  }
+}
+
+export function sendQuestionAnswer(questionId: string, answers: ChatAnswer[]) {
+  return sendQuestionFrame("question.answer", questionId, { answers })
+}
+
+export function sendQuestionCancel(questionId: string) {
+  return sendQuestionFrame("question.cancel", questionId, {})
 }
 
 export async function sendChatMessageWhenReady(
