@@ -59,6 +59,11 @@ pnpm exec playwright install chromium   # once
 pnpm run test:e2e                       # uses the build above
 ```
 
+Before a release, check the container image with `COMPA_TEST_IMAGE=1 go test ./docker/`:
+it builds the image from programs built here, starts it as an unattended install
+does and checks that it answers behind its password. It needs Docker, and the
+web UI built first; `DOCKER_CONTEXT` picks the engine.
+
 The installers have their own tests: `bash scripts/install/test-install.sh` on
 Linux and `pwsh scripts/install/test-install.ps1` on Windows, where
 `-Shell powershell` runs them under Windows PowerShell 5.1.
