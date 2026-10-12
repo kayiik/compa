@@ -94,6 +94,10 @@ func TestImageStartsBehindItsPassword(t *testing.T) {
 		t.Errorf("COMPA_ALLOWED_HOSTS's name got %s, want 200", out)
 	}
 
+	if out := curl("-o", "/dev/null", "-w", "%{http_code}", "http://localhost:18800/api/gateway/status"); out != "401" {
+		t.Errorf("the gateway status without signing in got %s, want 401", out)
+	}
+
 	login := curl("-c", "/tmp/cookies", "-H", "Origin: http://localhost:18800", "-H", "Content-Type: application/json",
 		"-d", fmt.Sprintf(`{"password":%q}`, password), "http://localhost:18800/api/auth/login")
 	if !strings.Contains(login, `"ok"`) {

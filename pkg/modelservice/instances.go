@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"path/filepath"
 	"reflect"
 	"sort"
 	"strings"
@@ -394,10 +395,48 @@ func loadConfigErr(path string) (*config.Config, error) {
 	return cfg, nil
 }
 
+// InstanceLockPath is the path the instance mutators lock, through
+// config.WithFileLock, for their whole load-modify-save of the config, the
+// auth store and the catalogs. The OS lock is on its sidecar
+// InstanceLockPath()+".flock" in the Compa home, so the launcher and the
+// compa-kernel model commands, in other processes, take turns. It is not the
+// lock SaveConfig or the catalog store take, so they still work inside it.
+func InstanceLockPath() string {
+	return filepath.Join(config.GetHome(), "provider-instances")
+}
+
+// withInstanceLock runs fn holding the instance lock. A failure to take the
+// lock is an internal error; fn's error comes back as it is.
+func withInstanceLock(fn func() error) error {
+	ran := false
+	err := config.WithFileLock(InstanceLockPath(), func() error {
+		ran = true
+		return fn()
+	})
+	if err != nil && !ran {
+		return instanceErr(ErrInstanceInternal, err, "Failed to lock provider instances: %v", err)
+	}
+	return err
+}
+
 // CreateInstance adds the instance input describes to the config at
 // configPath, and stores its API key. A key that fails to store takes the
-// instance out of the config again. The caller serializes config writes.
+// instance out of the config again. It holds the instance lock (see
+// InstanceLockPath) throughout, so other processes' writes are not lost.
 func CreateInstance(configPath string, input InstanceInput, deps InstanceDeps) (*config.ProviderInstanceConfig, error) {
+	var created *config.ProviderInstanceConfig
+	err := withInstanceLock(func() error {
+		var err error
+		created, err = createInstanceLocked(configPath, input, deps)
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	return created, nil
+}
+
+func createInstanceLocked(configPath string, input InstanceInput, deps InstanceDeps) (*config.ProviderInstanceConfig, error) {
 	deps = deps.withDefaults()
 	instance, err := InstanceFromCreateInput(input)
 	if err != nil {
@@ -438,9 +477,23 @@ func CreateInstance(configPath string, input InstanceInput, deps InstanceDeps) (
 // headers or settings - drops the instance's catalog and its models from the
 // active models, the routes and the model selections, as disabling it does;
 // disabling an instance routes name is refused. A failure restores the
-// config, and the credential it replaced. The caller serializes config
-// writes.
+// config, and the credential it replaced; when the stored credential the
+// instance uses cannot be read, nothing changes. It holds the instance lock
+// (see InstanceLockPath) throughout.
 func UpdateInstance(configPath, id string, input InstanceInput, deps InstanceDeps) (*config.ProviderInstanceConfig, error) {
+	var updated *config.ProviderInstanceConfig
+	err := withInstanceLock(func() error {
+		var err error
+		updated, err = updateInstanceLocked(configPath, id, input, deps)
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	return updated, nil
+}
+
+func updateInstanceLocked(configPath, id string, input InstanceInput, deps InstanceDeps) (*config.ProviderInstanceConfig, error) {
 	deps = deps.withDefaults()
 	if input.ID != id {
 		return nil, instanceErr(ErrInstanceInvalid, nil, "provider instance id is immutable and must match the request path")
@@ -459,9 +512,23 @@ func UpdateInstance(configPath, id string, input InstanceInput, deps InstanceDep
 		return nil, instanceErr(ErrInstanceInvalid, err, "Validation error: %v", err)
 	}
 	var pendingCredential, previousCredential *auth.AuthCredential
+	// restoreByDelete: with no previous credential, a rollback deletes the
+	// new one. It is only safe when the read said there was none.
+	restoreByDelete := true
 	credentialKey := InstanceCredentialKey(instance.ID)
 	if key := input.apiKey(); key != "" {
-		previousCredential, _ = deps.GetCredential(credentialKey)
+		var readErr error
+		previousCredential, readErr = deps.GetCredential(credentialKey)
+		if readErr != nil {
+			// The instance uses the stored key: without a copy a rollback
+			// could not restore it, so nothing changes.
+			if previousInstance.AuthConnectionRef == "credential:"+credentialKey {
+				return nil, instanceErr(ErrInstanceInternal, readErr, "Failed to read provider credential: %v", readErr)
+			}
+			// Nothing names the key; a rollback leaves whatever is stored
+			// rather than delete what it could not read.
+			previousCredential, restoreByDelete = nil, false
+		}
 		pendingCredential = &auth.AuthCredential{Provider: instance.ProviderKind, AuthMethod: APIKeyAuthMethod, AccessToken: key}
 		instance.AuthConnectionRef = "credential:" + credentialKey
 	}
@@ -505,7 +572,7 @@ func UpdateInstance(configPath, id string, input InstanceInput, deps InstanceDep
 			if pendingCredential != nil {
 				if previousCredential != nil {
 					_ = deps.SetCredential(credentialKey, previousCredential)
-				} else {
+				} else if restoreByDelete {
 					_ = deps.DeleteCredential(credentialKey)
 				}
 			}
@@ -524,9 +591,13 @@ func UpdateInstance(configPath, id string, input InstanceInput, deps InstanceDep
 // DeleteInstance removes the instance id, its catalog, its models from the
 // active models and the model selections, and the API key stored for it.
 // An instance routes name is not removed: the error lists the routes. A
-// failure restores the config and the catalogs. The caller serializes
-// config writes.
+// failure restores the config and the catalogs. It holds the instance lock
+// (see InstanceLockPath) throughout.
 func DeleteInstance(configPath, id string, deps InstanceDeps) error {
+	return withInstanceLock(func() error { return deleteInstanceLocked(configPath, id, deps) })
+}
+
+func deleteInstanceLocked(configPath, id string, deps InstanceDeps) error {
 	deps = deps.withDefaults()
 	cfg, err := loadConfigErr(configPath)
 	if err != nil {
@@ -586,26 +657,18 @@ type SyncResult struct {
 // deps.SyncCatalog and saves them as its catalog. The models the new catalog
 // no longer lists leave the active models, the routes and the model
 // selections. A disabled instance, an adapter that cannot list models or an
-// instance without an endpoint is refused. The caller serializes config
-// writes.
+// instance without an endpoint is refused. The fetch runs without the
+// instance lock; the save then takes it, loads the config again and applies
+// the catalog to the instance as it is now. An instance removed, made
+// ineligible or given a new connection during the fetch is refused.
 func SyncInstanceCatalog(ctx context.Context, configPath, id string, deps InstanceDeps) (*SyncResult, error) {
 	cfg, err := loadConfigErr(configPath)
 	if err != nil {
 		return nil, err
 	}
-	index := InstanceIndex(cfg, id)
-	if index < 0 {
-		return nil, instanceErr(ErrInstanceNotFound, nil, "provider instance not found")
-	}
-	instance := cfg.ProviderInstances[index]
-	if instance.State == config.ProviderInstanceStateDisabled {
-		return nil, instanceErr(ErrInstanceDisabled, nil, "provider instance is disabled")
-	}
-	if !CatalogSyncSupported(instance) {
-		return nil, instanceErr(ErrInstanceUnsupported, nil, "provider instance adapter does not support catalog sync")
-	}
-	if strings.TrimSpace(instance.Endpoint) == "" {
-		return nil, instanceErr(ErrInstanceUnsupported, nil, "provider instance endpoint is required for catalog sync")
+	instance, err := syncableInstance(cfg, id)
+	if err != nil {
+		return nil, err
 	}
 	if deps.SyncCatalog == nil {
 		return nil, instanceErr(ErrInstanceNotConfigured, nil, "provider catalog sync driver is not configured")
@@ -623,6 +686,63 @@ func SyncInstanceCatalog(ctx context.Context, configPath, id string, deps Instan
 	models, err := deps.SyncCatalog(ctx, input)
 	if err != nil {
 		return nil, instanceErr(ErrInstanceUpstream, err, "Failed to sync provider catalog: %v", err)
+	}
+	fetchedFrom := instance
+	err = withInstanceLock(func() error {
+		var err error
+		instance, err = applySyncedCatalogLocked(configPath, id, fetchedFrom, models)
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	if models == nil {
+		models = []CatalogModel{}
+	}
+	return &SyncResult{InstanceID: instance.ID, Models: models, Total: len(models)}, nil
+}
+
+// syncableInstance returns the instance id of cfg when its catalog can sync.
+func syncableInstance(cfg *config.Config, id string) (*config.ProviderInstanceConfig, error) {
+	index := InstanceIndex(cfg, id)
+	if index < 0 {
+		return nil, instanceErr(ErrInstanceNotFound, nil, "provider instance not found")
+	}
+	instance := cfg.ProviderInstances[index]
+	if instance.State == config.ProviderInstanceStateDisabled {
+		return nil, instanceErr(ErrInstanceDisabled, nil, "provider instance is disabled")
+	}
+	if !CatalogSyncSupported(instance) {
+		return nil, instanceErr(ErrInstanceUnsupported, nil, "provider instance adapter does not support catalog sync")
+	}
+	if strings.TrimSpace(instance.Endpoint) == "" {
+		return nil, instanceErr(ErrInstanceUnsupported, nil, "provider instance endpoint is required for catalog sync")
+	}
+	return instance, nil
+}
+
+// sameConnection reports whether a and b reach the provider the same way, so
+// a catalog fetched through a holds for b.
+func sameConnection(a, b *config.ProviderInstanceConfig) bool {
+	return a.ProviderKind == b.ProviderKind && a.Adapter == b.Adapter && a.Protocol == b.Protocol &&
+		a.Endpoint == b.Endpoint && a.AuthConnectionRef == b.AuthConnectionRef &&
+		reflect.DeepEqual(a.Headers, b.Headers) && reflect.DeepEqual(a.Settings, b.Settings)
+}
+
+// applySyncedCatalogLocked saves models, fetched through fetchedFrom, as the
+// catalog of the instance id in the config as it is now, and drops the
+// targets the catalog no longer lists. The caller holds the instance lock.
+func applySyncedCatalogLocked(configPath, id string, fetchedFrom *config.ProviderInstanceConfig, models []CatalogModel) (*config.ProviderInstanceConfig, error) {
+	cfg, err := loadConfigErr(configPath)
+	if err != nil {
+		return nil, err
+	}
+	instance, err := syncableInstance(cfg, id)
+	if err != nil {
+		return nil, err
+	}
+	if !sameConnection(fetchedFrom, instance) {
+		return nil, instanceErr(ErrInstanceConflict, nil, "provider instance changed during catalog sync; sync again")
 	}
 	previousCatalogs, err := LoadCatalogs()
 	if err != nil {
@@ -651,10 +771,7 @@ func SyncInstanceCatalog(ctx context.Context, configPath, id string, deps Instan
 			return nil, instanceErr(ErrInstanceInternal, err, "Failed to reconcile provider references: %v", err)
 		}
 	}
-	if models == nil {
-		models = []CatalogModel{}
-	}
-	return &SyncResult{InstanceID: instance.ID, Models: models, Total: len(models)}, nil
+	return instance, nil
 }
 
 // DropsTargets reports whether DropTargets(cfg, keep) changes cfg: whether

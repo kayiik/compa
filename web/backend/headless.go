@@ -24,8 +24,11 @@ const (
 // so the file only ever seeds the first one.
 func initialPasswordFromFile(ctx context.Context, store api.PasswordStore, path string) (bool, error) {
 	path = strings.TrimSpace(path)
-	if path == "" || store == nil {
+	if path == "" {
 		return false, nil
+	}
+	if store == nil {
+		return false, fmt.Errorf("%s is set, but the dashboard password store isn't open", envDashboardPasswordFile)
 	}
 	initialized, err := store.IsInitialized(ctx)
 	if err != nil {
@@ -38,7 +41,9 @@ func initialPasswordFromFile(ctx context.Context, store api.PasswordStore, path 
 	if err != nil {
 		return false, fmt.Errorf("read %s: %w", envDashboardPasswordFile, err)
 	}
-	password := strings.TrimSpace(string(raw))
+	// The first line is the password, as a secret file or `echo` writes it.
+	line, _, _ := strings.Cut(string(raw), "\n")
+	password := strings.TrimSpace(line)
 	if err := api.ValidateDashboardPassword(password); err != nil {
 		return false, fmt.Errorf("the password in %s: %w", envDashboardPasswordFile, err)
 	}
@@ -51,7 +56,14 @@ func initialPasswordFromFile(ctx context.Context, store api.PasswordStore, path 
 func allowedHosts(saved []string, extra ...string) []string {
 	hosts := append([]string(nil), saved...)
 	for _, list := range extra {
-		hosts = append(hosts, strings.Split(list, ",")...)
+		for _, host := range strings.Split(list, ",") {
+			// A URL names its host: https://compa.example/ is compa.example.
+			if _, rest, ok := strings.Cut(host, "://"); ok {
+				host = rest
+			}
+			host, _, _ = strings.Cut(host, "/")
+			hosts = append(hosts, host)
+		}
 	}
 	return launcherconfig.NormalizeHosts(hosts)
 }

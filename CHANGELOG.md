@@ -11,6 +11,22 @@ Notable changes to Compa, newest first. Versions follow
   `catalogs` and `models` manage provider instances and their catalogs from
   the command line, with `--json`, as the Models page does; the API key is
   read from stdin only. See [CLI](docs/cli.md#model).
+- `COMPA_DASHBOARD_PASSWORD_FILE` gives `compa` its first dashboard password
+  from a file, such as a Docker secret, and `-allowed-hosts` or
+  `COMPA_ALLOWED_HOSTS` the names it answers to, so a container needs no
+  setup step. See [Run in a container](docs/install.md#run-in-a-container).
+
+### Changed
+
+- The skills page and `compa-kernel skills` list the built-in skills the
+  agent loads: from beside the programs, or
+  `COMPA_BUILTIN_SKILLS`, never the folder Compa was started in.
+- The launcher's catalog responses give an empty `models` as `[]`, not `null`.
+
+### Removed
+
+- `sqlite3` from the container image. A skill that needs it, or other tools,
+  can use an image built `FROM ghcr.io/kayiik/compa`.
 
 ## 0.0.2 - 2026-10-11
 

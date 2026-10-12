@@ -14,6 +14,7 @@ import (
 type fakeCredentials struct {
 	stored  map[string]*auth.AuthCredential
 	setErr  error
+	getErr  error
 	deleted []string
 }
 
@@ -24,6 +25,9 @@ func newFakeCredentials() *fakeCredentials {
 func (f *fakeCredentials) deps() InstanceDeps {
 	return InstanceDeps{
 		GetCredential: func(key string) (*auth.AuthCredential, error) {
+			if f.getErr != nil {
+				return nil, f.getErr
+			}
 			if cred, ok := f.stored[key]; ok {
 				return cred, nil
 			}

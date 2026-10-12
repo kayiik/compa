@@ -150,10 +150,14 @@ used only while no password is set:
 
 ```sh
 docker run -d --name compa -p 18800:18800 -v compa-data:/data \
-  -v ./password:/run/secrets/compa-password:ro \
+  -v "$PWD/password:/run/secrets/compa-password:ro" \
   -e COMPA_DASHBOARD_PASSWORD_FILE=/run/secrets/compa-password \
   ghcr.io/kayiik/compa
 ```
+
+The password is the file's first line. The container runs as uid 10001, which
+must be able to read the file: `chmod 0644 password`, or use your
+orchestrator's secrets. If it can't, Compa says so and doesn't start.
 
 Or set it once before the first start:
 `docker run --rm -it -v compa-data:/data ghcr.io/kayiik/compa -password -`.

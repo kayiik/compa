@@ -54,6 +54,17 @@ func TestInitialPasswordFromFile(t *testing.T) {
 			t.Fatalf("set=%v err=%v password=%q", set, err, store.password)
 		}
 	})
+	t.Run("only the first line is the password", func(t *testing.T) {
+		store := &fakePasswordStore{}
+		if _, err := initialPasswordFromFile(ctx, store, writePasswordFile(t, "first-line-secret\r\nsecond line\n")); err != nil || store.password != "first-line-secret" {
+			t.Fatalf("err=%v password=%q", err, store.password)
+		}
+	})
+	t.Run("a file named with no store open is an error", func(t *testing.T) {
+		if set, err := initialPasswordFromFile(ctx, nil, writePasswordFile(t, "long-enough-secret")); err == nil || set {
+			t.Fatalf("set=%v err=%v", set, err)
+		}
+	})
 	t.Run("no file named, nothing to do", func(t *testing.T) {
 		store := &fakePasswordStore{}
 		if set, err := initialPasswordFromFile(ctx, store, " "); err != nil || set {
@@ -71,7 +82,7 @@ func TestInitialPasswordFromFile(t *testing.T) {
 }
 
 func TestAllowedHostsJoinsSavedFlagAndEnvironment(t *testing.T) {
-	got := allowedHosts([]string{"proxy.example"}, "Compa.Example, 10.0.0.5:18800", "", "compa.example,lan.host")
+	got := allowedHosts([]string{"proxy.example"}, "Compa.Example, 10.0.0.5:18800", "", "compa.example,https://lan.host/compa")
 	want := []string{"proxy.example", "compa.example", "10.0.0.5", "lan.host"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("allowedHosts = %v, want %v", got, want)

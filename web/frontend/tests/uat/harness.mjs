@@ -575,6 +575,8 @@ try {
   // egress rewritten to the fake upstream. A kit that doesn't build skips
   // the extension journey; the core journey runs either way.
   let extensionReady = false
+  let stockInfo
+  let uatInfo
   if (kit) {
     try {
       const extensionRepo = kit.repo
@@ -625,7 +627,7 @@ try {
           delete daemonEnv[key]
       }
       stockDaemon = startDaemon(stockDaemonPath, stockDaemonPort, [], daemonEnv)
-      const stockInfo = await daemonInfo(`http://127.0.0.1:${stockDaemonPort}`)
+      stockInfo = await daemonInfo(`http://127.0.0.1:${stockDaemonPort}`)
       await stopProcess(stockDaemon)
       daemon = startDaemon(
         daemonPath,
@@ -633,12 +635,7 @@ try {
         ["-upstream", fakeURL],
         daemonEnv,
       )
-      const uatInfo = await daemonInfo(daemonURL)
-      if (providerShape(stockInfo) !== providerShape(uatInfo)) {
-        throw new Error(
-          `UAT daemon providers differ from the stock daemon:\n${providerShape(stockInfo)}\n${providerShape(uatInfo)}`,
-        )
-      }
+      uatInfo = await daemonInfo(daemonURL)
       extensionReady = true
     } catch (error) {
       await stopProcess(daemon)
@@ -653,6 +650,13 @@ try {
       `No extension kit at ${kitDir}: the extension daemon journey is skipped.`,
     )
   }
+  // A kit that builds and starts but registers other providers than the
+  // stock daemon is a regression, not a reason to skip.
+  if (extensionReady && providerShape(stockInfo) !== providerShape(uatInfo)) {
+    throw new Error(
+      `UAT daemon providers differ from the stock daemon:\n${providerShape(stockInfo)}\n${providerShape(uatInfo)}`,
+    )
+  }
 
   // Compa gets only the settings this run gives it: a COMPA_* variable from
   // the shell, such as COMPA_GATEWAY_PORT, would change what is tested. The
@@ -660,8 +664,11 @@ try {
   // does, so no setup link is needed.
   const passwordFile = path.join(runRoot, "dashboard-password")
   await fs.writeFile(passwordFile, `${password}\n`, { mode: 0o600 })
+  // Nor do provider keys or tokens from the shell: no real provider is used.
   const env = Object.fromEntries(
-    Object.entries(process.env).filter(([key]) => !key.startsWith("COMPA_")),
+    Object.entries(process.env).filter(
+      ([key]) => !key.startsWith("COMPA_") && !/_(API_KEY|TOKEN)$/.test(key),
+    ),
   )
   Object.assign(env, {
     COMPA_HOME: home,
