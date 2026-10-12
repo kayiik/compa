@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"errors"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -169,10 +170,10 @@ func TestAskUserValidation(t *testing.T) {
 			question(option("a"), option("b")),
 		}}, "1 to 4"},
 		{"no header", map[string]any{"questions": []any{map[string]any{"question": "Q?", "options": []any{option("a"), option("b")}}}}, "questions[0].header is required"},
-		{"one option", map[string]any{"questions": []any{question(option("a"))}}, "questions[0].options must be a list of 2 to 8"},
-		{"nine options", map[string]any{"questions": []any{question(
-			option("1"), option("2"), option("3"), option("4"), option("5"), option("6"), option("7"), option("8"), option("9"),
-		)}}, "2 to 8"},
+		{"one option", map[string]any{"questions": []any{question(option("a"))}}, "questions[0].options must be a list of 2 to 6"},
+		{"seven options", map[string]any{"questions": []any{question(
+			option("1"), option("2"), option("3"), option("4"), option("5"), option("6"), option("7"),
+		)}}, "2 to 6"},
 		{"no label", map[string]any{"questions": []any{question(map[string]any{"description": "d"}, option("b"))}}, "questions[0].options[0].label is required"},
 		{"no description", map[string]any{"questions": []any{question(map[string]any{"label": "a"}, option("b"))}}, "options[0].description is required"},
 		{"same label twice", map[string]any{"questions": []any{question(option("Yes"), option("yes"))}}, `the label "yes" twice`},
@@ -294,11 +295,15 @@ func TestParseQuestionReply(t *testing.T) {
 		{"several numbers", multi, "1,3", []bus.QuestionAnswer{{Selected: []string{"Red", "Green"}}}, ""},
 		{"several numbers with spaces", multi, "3 1, 3", []bus.QuestionAnswer{{Selected: []string{"Green", "Red"}}}, ""},
 		{"several for a single choice", single, "1,2", nil, "choose only one option"},
-		{"out of range", single, "4", nil, "choose an option from 1 to 3"},
+		{"out of range is own words", single, "4", []bus.QuestionAnswer{{Text: "4"}}, ""},
+		{"a year is own words", single, "2024", []bus.QuestionAnswer{{Text: "2024"}}, ""},
+		{"a sign is own words", single, "+1", []bus.QuestionAnswer{{Text: "+1"}}, ""},
+		{"a negative is own words", single, "-2", []bus.QuestionAnswer{{Text: "-2"}}, ""},
+		{"one number out of range is own words", multi, "1, 10", []bus.QuestionAnswer{{Text: "1, 10"}}, ""},
 		{"lines", both, "1 2\nlarge-ish", []bus.QuestionAnswer{{Selected: []string{"Red", "Blue"}}, {Text: "large-ish"}}, ""},
 		{"semicolons", both, "3; 2", []bus.QuestionAnswer{{Selected: []string{"Green"}}, {Selected: []string{"Large"}}}, ""},
 		{"too few", both, "3", nil, "please answer all 2 questions"},
-		{"out of range in the second", both, "1; 3", nil, "choose an option from 1 to 2 for question 2"},
+		{"out of range in the second", both, "1; 3", []bus.QuestionAnswer{{Selected: []string{"Red"}}, {Text: "3"}}, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -625,4 +630,114 @@ func TestQuestionsGoToAPresenter(t *testing.T) {
 	if err := respond(nil, true); !errors.Is(err, errQuestionGone) {
 		t.Fatalf("respond() after the answer = %v, want errQuestionGone", err)
 	}
+}
+
+// A message that passed the receive loop before a question opened in its chat
+// (queued behind a busy session, say) is a message when its turn runs, not
+// the question's answer.
+func TestQueuedMessageIsNotTakenForAnAnswer(t *testing.T) {
+	al, msgBus := newApprovalTestLoop(t)
+	owner := ownerTelegram("chat-1")
+	done := askQuestionsInBackground(al, context.Background(), owner, colorQuestion(false))
+	nextPost(t, msgBus)
+
+	queued := bus.InboundMessage{Context: *owner, Content: "2", SessionKey: "queued"}
+	response, err := al.processMessage(context.Background(), queued)
+	if err != nil || response == questionAnsweredReply {
+		t.Fatalf("processMessage() = %q, %v; want a turn, not an answer", response, err)
+	}
+	if _, _, waiting := al.questions.prompts.question(chatKey("telegram", "chat-1", "")); !waiting {
+		t.Fatal("the queued message answered the question")
+	}
+	if reply, _ := questionAnswer(al, owner, "1"); reply != questionAnsweredReply {
+		t.Fatalf("reply = %q, want %q", reply, questionAnsweredReply)
+	}
+	if result := waitQuestionResult(t, done); !reflect.DeepEqual(result.answers, []bus.QuestionAnswer{{Selected: []string{"Red"}}}) {
+		t.Fatalf("result = %+v", result)
+	}
+}
+
+// Text starting with "/" that names no command is an answer; a command passes.
+func TestUnknownSlashTextIsAnAnswer(t *testing.T) {
+	al, msgBus := newApprovalTestLoop(t)
+	owner := ownerTelegram("chat-1")
+	done := askQuestionsInBackground(al, context.Background(), owner, colorQuestion(false))
+	nextPost(t, msgBus)
+	if _, handled := questionAnswer(al, owner, "/help"); handled {
+		t.Fatal("/help was taken for an answer")
+	}
+	if reply, _ := questionAnswer(al, owner, "/var/log is fine"); reply != questionAnsweredReply {
+		t.Fatalf("reply = %q, want %q", reply, questionAnsweredReply)
+	}
+	if result := waitQuestionResult(t, done); !reflect.DeepEqual(result.answers, []bus.QuestionAnswer{{Text: "/var/log is fine"}}) {
+		t.Fatalf("result = %+v", result)
+	}
+}
+
+// An answer in the owner's own words is refused past questionAnswerMaxRunes,
+// from a text chat as from a presenter or a hook.
+func TestOverlongAnswerIsRefused(t *testing.T) {
+	questions := []bus.Question{colorQuestion(false)}
+	long := strings.Repeat("é", questionAnswerMaxRunes+1)
+	if _, err := normalizeQuestionAnswers(questions, []bus.QuestionAnswer{{Text: long}}); err == nil ||
+		!strings.Contains(err.Error(), "too long") {
+		t.Fatalf("normalizeQuestionAnswers() error = %v, want too long", err)
+	}
+	if _, err := normalizeQuestionAnswers(questions, []bus.QuestionAnswer{{Text: long[:len(long)-2]}}); err != nil {
+		t.Fatalf("an answer of exactly the cap: %v", err)
+	}
+
+	al, msgBus := newApprovalTestLoop(t)
+	owner := ownerTelegram("chat-1")
+	done := askQuestionsInBackground(al, context.Background(), owner, colorQuestion(false))
+	nextPost(t, msgBus)
+	if reply, handled := questionAnswer(al, owner, long); !handled || !strings.Contains(reply, "too long") {
+		t.Fatalf("an overlong reply = %q, %v; want the question to stay with a hint", reply, handled)
+	}
+	questionAnswer(al, owner, "1")
+	waitQuestionResult(t, done)
+}
+
+// Questions too long for a chat message are refused, asking to shorten them.
+func TestAskUserRefusesQuestionsTooLongForAChat(t *testing.T) {
+	desc := strings.Repeat("d", askUserDescriptionMaxRunes)
+	options := make([]any, 0, askUserMaxOptions)
+	for i := range askUserMaxOptions {
+		options = append(options, map[string]any{"label": fmt.Sprintf("Option %d", i+1), "description": desc})
+	}
+	questions := make([]any, 0, askUserMaxQuestions)
+	for range askUserMaxQuestions {
+		questions = append(questions, map[string]any{"header": "H", "question": "Q?", "options": options})
+	}
+	_, err := parseAskUserQuestions(map[string]any{"questions": questions})
+	if err == nil || !strings.Contains(err.Error(), "too long to show in a chat") ||
+		!strings.Contains(err.Error(), "shorten") {
+		t.Fatalf("parseAskUserQuestions() error = %v, want too long to show", err)
+	}
+	if _, err := parseAskUserQuestions(map[string]any{"questions": questions[:1]}); err != nil {
+		t.Fatalf("one question at the caps: %v", err)
+	}
+}
+
+// A question asked in a thread waits there: a reply in another thread of
+// the chat, or outside any thread, is not its answer.
+func TestQuestionWaitsInItsThread(t *testing.T) {
+	al, msgBus := newApprovalTestLoop(t)
+	inThread := ownerTelegram("chat-1")
+	inThread.TopicID = "thread-1"
+	done := askQuestionsInBackground(al, context.Background(), inThread, colorQuestion(false))
+	nextPost(t, msgBus)
+
+	other := *inThread
+	other.TopicID = "thread-2"
+	if _, handled := questionAnswer(al, &other, "2"); handled {
+		t.Fatal("a reply in another thread answered the question")
+	}
+	if _, handled := questionAnswer(al, ownerTelegram("chat-1"), "2"); handled {
+		t.Fatal("a reply outside the thread answered the question")
+	}
+	if reply, _ := questionAnswer(al, inThread, "2"); reply != questionAnsweredReply {
+		t.Fatalf("reply = %q, want %q", reply, questionAnsweredReply)
+	}
+	waitQuestionResult(t, done)
 }

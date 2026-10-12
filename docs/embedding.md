@@ -143,7 +143,8 @@ with one `bus.QuestionAnswer{Selected: labels, Text: words}` per question;
 `agent.QuestionActionPass` to leave them to the next answerer and at last to
 the owner in chat. Answerers are asked in hook order; the first that answers
 or cancels decides. One that fails, times out (`hooks.defaults.approval_timeout_ms`,
-60 seconds by default) or answers what doesn't fit the questions is passed
+60 seconds by default) or answers what doesn't fit the questions (an own-words
+`Text` is at most 2000 characters) is passed
 over. With nobody to ask, the model is told so. A process hook answers with
 `intercept: ["answer_question"]`: it gets `hook.answer_question` with the
 request as JSON and returns `{"action": "answer", "answers": [{"selected":

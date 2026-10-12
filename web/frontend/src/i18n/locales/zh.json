@@ -114,7 +114,7 @@
       "otherPlaceholder": "你的回答",
       "submit": "提交",
       "cancel": "取消",
-      "expired": "此问题已过期。"
+      "sendFailed": "发送失败。请检查连接后重试。"
     },
     "thinking": {
       "step1": "思考中..."

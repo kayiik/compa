@@ -114,7 +114,7 @@
       "otherPlaceholder": "Sua resposta",
       "submit": "Enviar",
       "cancel": "Cancelar",
-      "expired": "Esta pergunta expirou."
+      "sendFailed": "Não foi possível enviar. Verifique a conexão e tente de novo."
     },
     "thinking": {
       "step1": "Pensando..."

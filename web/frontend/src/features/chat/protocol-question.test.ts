@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-import { getChatState, patchQuestion, updateChatStore } from "@/store/chat"
+import {
+  clearSessionQuestions,
+  getChatState,
+  patchQuestion,
+  updateChatStore,
+} from "@/store/chat"
 
 import { handleWebChatMessage, parseQuestionCreate } from "./protocol"
 
@@ -113,5 +118,39 @@ describe("question frames", () => {
       "Pick one option",
     )
     expect(getChatState().isTurnActive).toBe(true)
+  })
+
+  it("resets a re-sent question's request and error", () => {
+    handleWebChatMessage({ type: "question.create", payload: CREATE }, SESSION)
+    patchQuestion(SESSION, "q1", { requestId: "req-1", error: "boom" })
+    handleWebChatMessage({ type: "question.create", payload: CREATE }, SESSION)
+    const question = getChatState().questionsBySession[SESSION]?.[0]
+    expect(question?.requestId).toBeUndefined()
+    expect(question?.error).toBeUndefined()
+  })
+
+  it("drops the card when the server says the question is not waiting", () => {
+    handleWebChatMessage({ type: "question.create", payload: CREATE }, SESSION)
+    patchQuestion(SESSION, "q1", { requestId: "req-1" })
+    handleWebChatMessage(
+      {
+        type: "error",
+        payload: {
+          request_id: "req-1",
+          code: "question_not_waiting",
+          message: "Not waiting",
+        },
+      },
+      SESSION,
+    )
+    expect(getChatState().questionsBySession[SESSION]).toBeUndefined()
+  })
+
+  it("clears only one session's questions", () => {
+    handleWebChatMessage({ type: "question.create", payload: CREATE }, SESSION)
+    handleWebChatMessage({ type: "question.create", payload: CREATE }, "s-2")
+    clearSessionQuestions(SESSION)
+    expect(getChatState().questionsBySession[SESSION]).toBeUndefined()
+    expect(getChatState().questionsBySession["s-2"]).toHaveLength(1)
   })
 })

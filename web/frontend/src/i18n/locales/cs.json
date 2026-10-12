@@ -116,7 +116,7 @@
       "otherPlaceholder": "Vaše odpověď",
       "submit": "Odeslat",
       "cancel": "Zrušit",
-      "expired": "Platnost této otázky vypršela."
+      "sendFailed": "Odeslání se nezdařilo. Zkontrolujte připojení a zkuste to znovu."
     },
     "thinking": {
       "step1": "Přemýšlím..."

@@ -22,6 +22,7 @@ import i18n from "@/i18n"
 import {
   type ChatAnswer,
   type ChatAttachment,
+  clearSessionQuestions,
   getChatState,
   patchQuestion,
   setChatSelection,
@@ -280,6 +281,9 @@ export async function connectChat() {
       updateChatStore({ connectionState: "connected" })
       isConnecting = false
       reconnectAttempts = 0
+      // The server re-sends question.create for every question still waiting;
+      // a question.resolved missed while away is never replayed.
+      clearSessionQuestions(sessionId)
       startHeartbeat(socket, generation, sessionId)
       if (lastOpenedSessionId === sessionId) {
         void reloadHistoryAfterReconnect(sessionId)
@@ -580,9 +584,7 @@ function sendQuestionFrame(
     console.warn("WebSocket not connected")
     return false
   }
-  const sessionId = activeSessionIdRef
   const id = `q-${++msgIdCounter}-${Date.now()}`
-  patchQuestion(sessionId, questionId, { requestId: id, error: undefined })
   try {
     wsRef.send(
       JSON.stringify({
@@ -591,19 +593,41 @@ function sendQuestionFrame(
         payload: { question_id: questionId, ...payload },
       }),
     )
-    return true
   } catch (error) {
     console.error(`Failed to send ${type}:`, error)
     return false
   }
+  // Only a frame that left marks the card as waiting on question.resolved.
+  patchQuestion(activeSessionIdRef, questionId, {
+    requestId: id,
+    error: undefined,
+  })
+  return true
+}
+
+/** Keeps the card usable and says why when a frame could not be sent. */
+function reportQuestionSend(questionId: string, sent: boolean) {
+  if (!sent) {
+    patchQuestion(activeSessionIdRef, questionId, {
+      requestId: undefined,
+      error: i18n.t("chat.question.sendFailed"),
+    })
+  }
+  return sent
 }
 
 export function sendQuestionAnswer(questionId: string, answers: ChatAnswer[]) {
-  return sendQuestionFrame("question.answer", questionId, { answers })
+  return reportQuestionSend(
+    questionId,
+    sendQuestionFrame("question.answer", questionId, { answers }),
+  )
 }
 
 export function sendQuestionCancel(questionId: string) {
-  return sendQuestionFrame("question.cancel", questionId, {})
+  return reportQuestionSend(
+    questionId,
+    sendQuestionFrame("question.cancel", questionId, {}),
+  )
 }
 
 export async function sendChatMessageWhenReady(

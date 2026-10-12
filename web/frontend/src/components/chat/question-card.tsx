@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from "react"
+import { useId, useState } from "react"
 import { useTranslation } from "react-i18next"
 
 import { Badge } from "@/components/ui/badge"
@@ -15,25 +15,6 @@ import type {
   ChatQuestionItem,
   PendingQuestion,
 } from "@/store/chat"
-
-function useExpired(expiresAt: number) {
-  const [expired, setExpired] = useState(
-    () => expiresAt > 0 && Date.now() >= expiresAt,
-  )
-  useEffect(() => {
-    if (expiresAt <= 0) return
-    const remaining = expiresAt - Date.now()
-    if (remaining <= 0) {
-      setExpired(true)
-      return
-    }
-    // setTimeout caps near 24.8 days; a longer wait never needs the timer.
-    if (remaining > 2_000_000_000) return
-    const timer = window.setTimeout(() => setExpired(true), remaining)
-    return () => window.clearTimeout(timer)
-  }, [expiresAt])
-  return expired
-}
 
 interface QuestionSectionProps {
   item: ChatQuestionItem
@@ -155,13 +136,12 @@ export function QuestionCard({
 }: QuestionCardProps) {
   const { t } = useTranslation()
   const titleId = useId()
-  const expired = useExpired(question.expiresAt)
   const [drafts, setDrafts] = useState<QuestionDraft[]>(() =>
     question.questions.map(() => ({ selected: [], text: "" })),
   )
-  // Sent and not refused: wait for question.resolved.
-  const pending = Boolean(question.requestId) && !question.error
-  const disabled = expired || pending
+  // Sent and not refused: wait for question.resolved. Expiry is the server's
+  // to decide (question.resolved removes the card), not the client clock's.
+  const disabled = Boolean(question.requestId) && !question.error
   const complete = isDraftComplete(drafts)
 
   return (
@@ -190,11 +170,6 @@ export function QuestionCard({
       {question.error && (
         <p role="alert" className="text-destructive text-sm">
           {question.error}
-        </p>
-      )}
-      {expired && (
-        <p role="status" className="text-muted-foreground text-sm">
-          {t("chat.question.expired")}
         </p>
       )}
 

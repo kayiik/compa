@@ -104,10 +104,15 @@ describe("QuestionCard", () => {
     expect(screen.getByRole("button", { name: "Cancel" })).toBeEnabled()
   })
 
-  it("disables the card once the question expires", () => {
-    renderCard({ ...QUESTION, expiresAt: Date.now() - 1 })
+  it("waits for question.resolved once sent and not refused", () => {
+    renderCard({ ...QUESTION, requestId: "r1" })
     expect(screen.getByRole("radio", { name: /SQLite/ })).toBeDisabled()
     expect(screen.getByRole("button", { name: "Cancel" })).toBeDisabled()
-    expect(screen.getByText("This question has expired.")).toBeInTheDocument()
+  })
+
+  it("does not disable the card on the client clock", () => {
+    renderCard({ ...QUESTION, expiresAt: Date.now() - 1 })
+    expect(screen.getByRole("radio", { name: /SQLite/ })).toBeEnabled()
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeEnabled()
   })
 })

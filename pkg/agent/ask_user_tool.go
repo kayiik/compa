@@ -20,11 +20,14 @@ const askUserToolName = "ask_user"
 const (
 	askUserMaxQuestions        = 4
 	askUserMinOptions          = 2
-	askUserMaxOptions          = 8
+	askUserMaxOptions          = 6
 	askUserHeaderMaxRunes      = 40
-	askUserQuestionMaxRunes    = 1000
+	askUserQuestionMaxRunes    = 500
 	askUserLabelMaxRunes       = 80
-	askUserDescriptionMaxRunes = 300
+	askUserDescriptionMaxRunes = 160
+	// askUserTextMaxRunes caps the questions as a text message (questionText),
+	// to fit a chat message on Slack, WhatsApp and the like.
+	askUserTextMaxRunes = 3500
 )
 
 // askUserTool asks the owner questions and waits for the answers
@@ -40,7 +43,7 @@ func newAskUserTool(al *AgentLoop) *askUserTool { return &askUserTool{al: al} }
 func (t *askUserTool) Name() string { return askUserToolName }
 
 func (t *askUserTool) Description() string {
-	return "Ask the person you work for one to four questions, each with two to eight options, and wait " +
+	return "Ask the person you work for one to four questions, each with two to six options, and wait " +
 		"for the answers. Use it when you need their decision or preference and can't reasonably assume it; " +
 		"don't use it for what you can find out yourself. They may choose options, answer in their own " +
 		"words, or cancel. Mark the option you suggest as recommended."
@@ -68,7 +71,7 @@ func (t *askUserTool) Parameters() map[string]any {
 						},
 						"options": map[string]any{
 							"type":        "array",
-							"description": "The choices (2 to 8). A typed answer is always allowed; don't add an 'Other' option.",
+							"description": "The choices (2 to 6). A typed answer is always allowed; don't add an 'Other' option.",
 							"minItems":    askUserMinOptions,
 							"maxItems":    askUserMaxOptions,
 							"items": map[string]any{
@@ -203,6 +206,10 @@ func parseAskUserQuestions(args map[string]any) ([]bus.Question, error) {
 			return nil, fmt.Errorf("%s: at most one option may be recommended", where)
 		}
 		questions = append(questions, q)
+	}
+	if n := utf8.RuneCountInString(questionText(questions)); n > askUserTextMaxRunes {
+		return nil, fmt.Errorf("the questions are too long to show in a chat (%d characters as a message, at most %d): "+
+			"shorten the questions and descriptions, or ask fewer questions", n, askUserTextMaxRunes)
 	}
 	return questions, nil
 }

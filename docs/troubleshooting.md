@@ -112,9 +112,11 @@ When the agent [asks you questions](use.md#questions):
 - It is asked where an approval would be; a scheduled job's question goes to
   the chat you last wrote to Compa from, and with none the agent is told it
   can't ask.
-- Only your next message in that chat answers it, and only while it waits
-  (30 minutes). A reply that doesn't fit gets a hint; answer again or
-  `/cancel`.
+- Only your next text message in that chat (and thread, on Slack) answers it,
+  and only while it waits (30 minutes); a voice message doesn't. A reply that
+  doesn't fit gets a hint; answer again or `/cancel`.
+- In the web chat, a tab of the session has to be open when the agent asks;
+  otherwise the agent is told nobody can be asked.
 
 ## A channel doesn't answer
 

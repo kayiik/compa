@@ -68,9 +68,11 @@ func newOperatorPrompts() *operatorPrompts {
 	return &operatorPrompts{pending: make(map[string]*operatorPrompt)}
 }
 
-// chatKey names a chat in the registry.
-func chatKey(channel, chatID string) string {
-	return strings.TrimSpace(channel) + "\x00" + strings.TrimSpace(chatID)
+// chatKey names a chat in the registry: a channel's chat, and the topic or
+// thread in it (a Slack thread, say), so a reply in another
+// thread of the chat is not taken for the answer.
+func chatKey(channel, chatID, topicID string) string {
+	return strings.TrimSpace(channel) + "\x00" + strings.TrimSpace(chatID) + "\x00" + strings.TrimSpace(topicID)
 }
 
 // wait registers p under a new id, posts it through post and waits for the

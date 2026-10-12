@@ -101,7 +101,7 @@ You get, with the `session_id` they belong to (except `error` and `pong`):
 | `question.create` | `question_id`, `expires_at` (Unix milliseconds) and `questions`: each with `header`, `question`, `multiple` (when several options may be chosen) and `options`, each with `label`, `description` and `recommended` (on at most one). |
 | `question.resolved` | `question_id` and `outcome`: `answered`, `cancelled`, `expired` or `ended` (the turn ended first). |
 | `turn.end` | `request_id`, `request_ids`, `status` (`completed`, `error` or `aborted`) and, for an error, `error`. |
-| `error` | `code`, `message`, and `request_id` when it's about a `message.send`. `invalid_media` and `empty_content` refuse that message; `invalid_message` and `unknown_type` refuse a frame that isn't one. `invalid_answer`, `question_not_waiting` and `forbidden` refuse a `question.answer` or `question.cancel`, with its `id` as `request_id`. |
+| `error` | `code`, `message`, and `request_id` when it's about a `message.send`. `invalid_media` and `empty_content` refuse that message; `invalid_message` and `unknown_type` refuse a frame that isn't one. `invalid_answer`, `question_not_waiting` and `forbidden` refuse a `question.answer` or `question.cancel`, with its `id` as `request_id`: `invalid_answer` when the answers don't fit the questions (an own-words `text` is at most 2000 characters), `question_not_waiting` when the question was answered, cancelled or expired. The web chat's token holder is its owner, so `forbidden` appears only if a sender check refuses the answer. |
 | `pong` | The `id` of your `ping`. |
 
 A turn is Compa answering: `turn.start` comes before its reply and `turn.end`
@@ -111,13 +111,16 @@ lists its `id` in `request_ids`. A command such as `/help` is answered without
 a turn, with `message.create` alone.
 
 When the agent [asks you questions](use.md#questions), the session gets a
-`question.create` instead of a text message, while its turn waits. Show the
+`question.create` instead of a text message, while its turn waits. With no
+socket of the session open, the question isn't asked: the agent is told
+nobody can answer, as for an approval. Show the
 options, and a field for the person's own words; send `question.answer` or
 `question.cancel`. A wrong answer gets an `error` and the question keeps
 waiting. Every socket of the session gets `question.resolved` when the
 question stops waiting, however it ended: drop it then. A socket that opens the
 session while a question waits gets its `question.create` again, with the same
-`question_id`. A `message.send` also answers it, as text: option numbers or
+`question_id`, never after that question's `question.resolved`. A
+`message.send` also answers it, as text: option numbers or
 words, as in a chat app. These frames are additions to the protocol, so the
 gateway protocol version doesn't change.
 

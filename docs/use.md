@@ -156,15 +156,18 @@ the enabled webhooks, but you answer in your chat. Interactive
 ### Questions
 
 When the agent needs your decision, it can ask you, with the `ask_user` tool:
-one to four questions, each with two to eight options (one may be marked
-recommended), some letting you pick several. You can always answer in your
-own words instead, or cancel. The turn waits for your answer, up to 30
-minutes; the agent is told if you cancelled or didn't answer.
+one to four questions, each with two to six options (one may be marked
+recommended), some letting you pick several. The questions have to fit in one
+chat message; the agent is told to shorten them otherwise. You can always
+answer in your own words instead, or cancel. The turn waits for your answer,
+up to 30 minutes; the agent is told if you cancelled or didn't answer.
 
 The questions go where an approval would: the chat of your message, or for a
 scheduled job the chat you last wrote to Compa from (with none, the agent is
 told it can't ask). Only you, the owner, can answer. One question waits per
-chat at a time; the agent is told to wait if it asks another there.
+chat at a time (per thread, on Slack); the agent is told to wait if it asks
+another there. In the web chat, the questions need the chat open: with no
+tab of that session open, the agent is told nobody can be asked.
 
 The web chat shows the options to pick from. Slack, WhatsApp and the terminal
 get a numbered list:
@@ -186,9 +189,14 @@ Reply with one line per question, or the answers separated by ";" (e.g. 2; 1,3; 
 
 Your next message in that chat answers: `2`, `1,3` for several, or your own
 words; with several questions, one line each or `2; 1,3`. `/cancel` cancels.
-An answer that doesn't fit, such as an option number that isn't listed, gets
-a hint and the question keeps waiting. Other commands, such as `/stop`, work
-as usual.
+Numbers that aren't all listed options, such as `2024`, count as your own
+words. An answer that doesn't fit, such as two options for a question that
+takes one, or own words over 2000 characters, gets a hint and the question
+keeps waiting. Other commands, such as `/stop`, work as usual; text that
+starts with `/` but isn't a command, such as `/var/log`, is an answer.
+Answer in text: a voice message isn't taken for an answer, and the question
+keeps waiting. A message you sent before the question was asked, still
+waiting its turn, isn't taken for the answer either.
 
 `ask_user` itself is never asked about. To keep the agent from asking, hide it:
 `{"tool": "ask_user", "action": "hide"}`.

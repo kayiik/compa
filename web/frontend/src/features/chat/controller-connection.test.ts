@@ -114,4 +114,65 @@ describe("the chat connection", () => {
     )
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
+
+  it("keeps a question usable when its answer can't be sent, and clears questions on reconnect", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {})
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve(new Response("{}", { status: 404 }))),
+    )
+    vi.resetModules()
+    const controller = await import("./controller")
+    const { updateGatewayStore } = await import("@/store/gateway")
+    const { getChatState } = await import("@/store/chat")
+    updateGatewayStore({ status: "running" })
+
+    controller.initializeChatStore()
+    const first = FakeSocket.instances[0]
+    first.open()
+    const session = getChatState().activeSessionId
+    const create = {
+      question_id: "q1",
+      expires_at: Date.now() + 60_000,
+      questions: [
+        {
+          header: "",
+          question: "Which?",
+          options: [
+            { label: "A", description: "" },
+            { label: "B", description: "" },
+          ],
+        },
+      ],
+    }
+    first.receive({ type: "question.create", payload: create })
+    const question = () => getChatState().questionsBySession[session]?.[0]
+
+    const send = vi.spyOn(first, "send").mockImplementationOnce(() => {
+      throw new Error("closed")
+    })
+    expect(
+      controller.sendQuestionAnswer("q1", [{ selected: ["A"], text: "" }]),
+    ).toBe(false)
+    expect(question()?.requestId).toBeUndefined()
+    expect(question()?.error).toBe(
+      "Couldn't send. Check the connection and try again.",
+    )
+
+    expect(controller.sendQuestionCancel("q1")).toBe(true)
+    expect(send).toHaveBeenCalledTimes(2)
+    expect(question()?.requestId).toMatch(/^q-/)
+    expect(question()?.error).toBeUndefined()
+
+    // A question.resolved missed while away must not leave the card behind.
+    first.close()
+    first.onclose?.()
+    expect(controller.sendQuestionCancel("q1")).toBe(false)
+    vi.advanceTimersByTime(1000)
+    const second = FakeSocket.instances[1]
+    expect(second).toBeDefined()
+    second.open()
+    expect(getChatState().questionsBySession[session]).toBeUndefined()
+  })
 })

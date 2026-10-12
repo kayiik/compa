@@ -26,8 +26,13 @@ type webQuestion struct {
 
 var _ channels.QuestionPresenter = (*WebChannel)(nil)
 
-// ShowQuestion implements channels.QuestionPresenter. The question waits for
-// a socket even when none is open.
+// ShowQuestion implements channels.QuestionPresenter. Like an approval
+// request, it fails when no socket of the chat is open to show it: nobody
+// would see it, and the turn would wait unseen.
+//
+// A question's frames are written under questionsMu, as resendQuestions
+// writes its own, so a socket never gets a question.create after that
+// question's question.resolved.
 func (c *WebChannel) ShowQuestion(
 	_ context.Context,
 	chatID string,
@@ -38,6 +43,7 @@ func (c *WebChannel) ShowQuestion(
 		return errors.New("question without id or responder")
 	}
 	c.questionsMu.Lock()
+	defer c.questionsMu.Unlock()
 	if c.questions == nil {
 		c.questions = make(map[string]map[string]webQuestion)
 	}
@@ -47,9 +53,11 @@ func (c *WebChannel) ShowQuestion(
 		c.questions[chatID] = byID
 	}
 	byID[prompt.ID] = webQuestion{prompt: prompt, respond: respond}
-	c.questionsMu.Unlock()
 
-	_ = c.broadcastToSession(chatID, questionCreateFrame(prompt))
+	if err := c.broadcastToSession(chatID, questionCreateFrame(prompt)); err != nil {
+		c.dropQuestionLocked(chatID, prompt.ID)
+		return err
+	}
 	return nil
 }
 
@@ -57,13 +65,8 @@ func (c *WebChannel) ShowQuestion(
 // sockets get question.resolved, to drop the question.
 func (c *WebChannel) QuestionResolved(_ context.Context, chatID, id, outcome string) {
 	c.questionsMu.Lock()
-	if byID := c.questions[chatID]; byID != nil {
-		delete(byID, id)
-		if len(byID) == 0 {
-			delete(c.questions, chatID)
-		}
-	}
-	c.questionsMu.Unlock()
+	defer c.questionsMu.Unlock()
+	c.dropQuestionLocked(chatID, id)
 	_ = c.broadcastToSession(chatID, newMessage(TypeQuestionResolved, map[string]any{
 		PayloadKeyQuestionID: id,
 		PayloadKeyOutcome:    outcome,
@@ -78,10 +81,20 @@ func questionCreateFrame(prompt bus.QuestionPrompt) WebMessage {
 	})
 }
 
-// waitingQuestions returns the questions waiting in chatID, oldest first.
-func (c *WebChannel) waitingQuestions(chatID string) []webQuestion {
-	c.questionsMu.Lock()
-	defer c.questionsMu.Unlock()
+// dropQuestionLocked forgets the question id of chatID. Must be called with
+// questionsMu held.
+func (c *WebChannel) dropQuestionLocked(chatID, id string) {
+	if byID := c.questions[chatID]; byID != nil {
+		delete(byID, id)
+		if len(byID) == 0 {
+			delete(c.questions, chatID)
+		}
+	}
+}
+
+// waitingQuestionsLocked returns the questions waiting in chatID, oldest
+// first. Must be called with questionsMu held.
+func (c *WebChannel) waitingQuestionsLocked(chatID string) []webQuestion {
 	waiting := make([]webQuestion, 0, len(c.questions[chatID]))
 	for _, q := range c.questions[chatID] {
 		waiting = append(waiting, q)
@@ -100,9 +113,13 @@ func (c *WebChannel) waitingQuestion(chatID, id string) (webQuestion, bool) {
 }
 
 // resendQuestions sends a socket that joined a session the questions waiting
-// there.
+// there. It holds questionsMu while it writes, as ShowQuestion and
+// QuestionResolved do, so a question resolved meanwhile is resent before its
+// question.resolved, or not at all.
 func (c *WebChannel) resendQuestions(pc *webConn) {
-	for _, q := range c.waitingQuestions("web:" + pc.sessionID) {
+	c.questionsMu.Lock()
+	defer c.questionsMu.Unlock()
+	for _, q := range c.waitingQuestionsLocked("web:" + pc.sessionID) {
 		frame := questionCreateFrame(q.prompt)
 		frame.SessionID = pc.sessionID
 		_ = pc.writeJSON(frame)
@@ -148,6 +165,10 @@ func (c *WebChannel) handleQuestionAnswer(pc *webConn, msg WebMessage, cancel bo
 		}
 	}
 	if err := q.respond(answers, cancel); err != nil {
+		if errors.Is(err, channels.ErrQuestionNotWaiting) {
+			refuse("question_not_waiting", err.Error())
+			return
+		}
 		refuse("invalid_answer", err.Error())
 	}
 }

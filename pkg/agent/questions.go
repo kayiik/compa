@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/kayiik/compa/pkg/bus"
 	"github.com/kayiik/compa/pkg/channels"
@@ -32,6 +33,10 @@ const (
 	// than an approval: a question may take thought.
 	ownerQuestionTimeout = 30 * time.Minute
 
+	// questionAnswerMaxRunes caps an answer in the owner's own words, from
+	// any channel or hook; a longer one is refused, not cut.
+	questionAnswerMaxRunes = 2000
+
 	// questionUnavailable is the outcome when nobody could be asked.
 	questionUnavailable = "unavailable"
 
@@ -50,7 +55,7 @@ const (
 )
 
 // errQuestionGone answers an answer to a question that no longer waits.
-var errQuestionGone = errors.New("this question is no longer waiting for an answer")
+var errQuestionGone = channels.ErrQuestionNotWaiting
 
 // ownerQuestions holds the questions waiting for the owner's answers, in the
 // owner's prompts (operatorPrompts).
@@ -171,7 +176,7 @@ func (al *AgentLoop) askOwnerQuestions(
 	var postedID string
 	answer, outcome, err := al.questions.prompts.wait(ctx, &operatorPrompt{
 		kind:      promptQuestion,
-		chat:      chatKey(target.channel, target.chatID),
+		chat:      chatKey(target.channel, target.chatID, target.topicID()),
 		questions: questions,
 	}, timeout, func(id string) error {
 		if presenter == nil {
@@ -212,6 +217,15 @@ func (al *AgentLoop) askOwnerQuestions(
 	return result
 }
 
+// topicID is the topic or thread of the chat a question is asked in: the
+// turn's, when it is asked in the turn's chat.
+func (c approvalChat) topicID() string {
+	if c.inbound == nil {
+		return ""
+	}
+	return c.inbound.TopicID
+}
+
 // questionPresenter returns channel when it shows questions with choices.
 func (al *AgentLoop) questionPresenter(channel string) channels.QuestionPresenter {
 	cm := al.currentChannelManager()
@@ -232,7 +246,7 @@ func (al *AgentLoop) QuestionWaiting(channel, chatID string) bool {
 	if al.questions == nil {
 		return false
 	}
-	_, _, ok := al.questions.prompts.question(chatKey(channel, chatID))
+	_, _, ok := al.questions.prompts.question(chatKey(channel, chatID, ""))
 	return ok
 }
 
@@ -306,8 +320,10 @@ func parseQuestionReply(questions []bus.Question, content string) ([]bus.Questio
 	answers := make([]bus.QuestionAnswer, len(questions))
 	for i, part := range parts {
 		q := questions[i]
-		numbers, ok := optionNumbers(part)
+		numbers, ok := optionNumbers(part, len(q.Options))
 		if !ok {
+			// Own words are always an answer, numbers too ("2024", "10")
+			// when they aren't options.
 			answers[i] = bus.QuestionAnswer{Text: part}
 			continue
 		}
@@ -316,9 +332,6 @@ func parseQuestionReply(questions []bus.Question, content string) ([]bus.Questio
 			which = fmt.Sprintf(" for question %d", i+1)
 		}
 		for _, n := range numbers {
-			if n < 1 || n > len(q.Options) {
-				return nil, fmt.Errorf("choose an option from 1 to %d%s", len(q.Options), which)
-			}
 			label := q.Options[n-1].Label
 			if !containsString(answers[i].Selected, label) {
 				answers[i].Selected = append(answers[i].Selected, label)
@@ -341,17 +354,22 @@ func nonEmptyParts(parts []string) []string {
 	return kept
 }
 
-// optionNumbers reads a reply part made only of option numbers, separated by
-// commas or spaces ("2", "1,3", "1, 3", "2."); ok is false for anything else.
-func optionNumbers(part string) ([]int, bool) {
+// optionNumbers reads a reply part made only of option numbers from 1 to
+// options, separated by commas or spaces ("2", "1,3", "1, 3", "2."); ok is
+// false for anything else, a sign or a number that is no option included.
+func optionNumbers(part string, options int) ([]int, bool) {
 	fields := strings.FieldsFunc(part, func(r rune) bool { return r == ',' || r == ' ' || r == '\t' })
 	if len(fields) == 0 {
 		return nil, false
 	}
 	numbers := make([]int, 0, len(fields))
 	for _, field := range fields {
-		n, err := strconv.Atoi(strings.TrimRight(field, ".)"))
-		if err != nil {
+		digits := strings.TrimRight(field, ".)")
+		if digits == "" || len(digits) > 3 || strings.TrimLeft(digits, "0123456789") != "" {
+			return nil, false
+		}
+		n, err := strconv.Atoi(digits)
+		if err != nil || n < 1 || n > options {
 			return nil, false
 		}
 		numbers = append(numbers, n)
@@ -380,6 +398,10 @@ func normalizeQuestionAnswers(questions []bus.Question, answers []bus.QuestionAn
 	for i, answer := range answers {
 		q := questions[i]
 		out := bus.QuestionAnswer{Text: strings.TrimSpace(answer.Text)}
+		if n := utf8.RuneCountInString(out.Text); n > questionAnswerMaxRunes {
+			return nil, fmt.Errorf("the answer to question %d is too long (%d characters, at most %d)",
+				i+1, n, questionAnswerMaxRunes)
+		}
 		for _, selected := range answer.Selected {
 			label, ok := optionLabel(q, selected)
 			if !ok {
@@ -419,14 +441,18 @@ func optionLabel(q bus.Question, label string) (string, bool) {
 
 // questionReply answers or cancels the question waiting in msg's chat with
 // msg and returns the reply for the chat; handled is false when msg is not
-// for a question. /cancel cancels; any other command passes. Only the owner's
+// for a question. /cancel cancels; any other registered command passes, and
+// other text starting with "/" (a path, say) is an answer. Only the owner's
 // answer counts.
 func (al *AgentLoop) questionReply(ctx context.Context, msg bus.InboundMessage) (reply string, handled bool) {
 	if al.questions == nil || isScheduledTurn(ctx) {
 		return "", false
 	}
-	id, questions, waiting := al.questions.prompts.question(chatKey(msg.Channel, msg.ChatID))
+	id, questions, waiting := al.questions.prompts.question(chatKey(msg.Channel, msg.ChatID, msg.Context.TopicID))
 	name, isCommand := commands.CommandName(msg.Content)
+	if isCommand && name != "cancel" && !al.isRegisteredCommand(name) {
+		isCommand = false
+	}
 	owner := senderIsOwner(msg)
 	if isCommand {
 		if name != "cancel" {
@@ -463,6 +489,16 @@ func (al *AgentLoop) questionReply(ctx context.Context, msg bus.InboundMessage) 
 		return capitalize(err.Error()) + ". Or reply /cancel.", true
 	}
 	return questionAnsweredReply, true
+}
+
+// isRegisteredCommand reports whether name is one of the agent's commands
+// (or an alias of one).
+func (al *AgentLoop) isRegisteredCommand(name string) bool {
+	if al.cmdRegistry == nil {
+		return true
+	}
+	_, ok := al.cmdRegistry.Lookup(name)
+	return ok
 }
 
 func capitalize(s string) string {

@@ -114,7 +114,7 @@
       "otherPlaceholder": "Your answer",
       "submit": "Submit",
       "cancel": "Cancel",
-      "expired": "This question has expired."
+      "sendFailed": "Couldn't send. Check the connection and try again."
     },
     "thinking": {
       "step1": "Thinking..."

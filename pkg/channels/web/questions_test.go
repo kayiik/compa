@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/kayiik/compa/pkg/bus"
+	"github.com/kayiik/compa/pkg/channels"
 )
 
 type recordedResponse struct {
@@ -130,7 +132,11 @@ func TestQuestionIsResentToAJoiningSocket(t *testing.T) {
 		t.Fatalf("Start() error = %v", err)
 	}
 	defer ch.Stop(context.Background())
-	showTestQuestion(t, ch, nil) // no socket yet: it waits
+	firstConn, firstReceived, firstCleanup := newTestWebSocket(t)
+	defer firstCleanup()
+	ch.addConnForTest(&webConn{id: "conn-1", conn: firstConn, sessionID: "sess-1"})
+	showTestQuestion(t, ch, nil)
+	mustReceiveWebMessage(t, firstReceived)
 
 	clientConn, received, cleanup := newTestWebSocket(t)
 	defer cleanup()
@@ -150,6 +156,96 @@ func TestQuestionIsResentToAJoiningSocket(t *testing.T) {
 	mustReceiveWebMessage(t, received)
 	ch.resendQuestions(pc)
 	assertNoWebMessage(t, received)
+}
+
+// With no socket open in the chat, the question can't be shown: ShowQuestion
+// fails, as an approval request does, and keeps nothing.
+func TestQuestionWithoutASocketFails(t *testing.T) {
+	ch := newTestWebChannel(t)
+	if err := ch.Start(context.Background()); err != nil {
+		t.Fatalf("Start() error = %v", err)
+	}
+	defer ch.Stop(context.Background())
+	err := ch.ShowQuestion(context.Background(), "web:sess-1", testPrompt(),
+		func([]bus.QuestionAnswer, bool) error { return nil })
+	if !errors.Is(err, channels.ErrSendFailed) {
+		t.Fatalf("ShowQuestion() with no socket = %v, want ErrSendFailed", err)
+	}
+	if _, ok := ch.waitingQuestion("web:sess-1", "q7k2mp"); ok {
+		t.Fatal("a question nobody was shown is kept")
+	}
+}
+
+// A socket joining while the question resolves never gets the question's
+// question.create after its question.resolved.
+func TestQuestionIsNeverResentAfterItsResolvedFrame(t *testing.T) {
+	ch := newTestWebChannel(t)
+	if err := ch.Start(context.Background()); err != nil {
+		t.Fatalf("Start() error = %v", err)
+	}
+	defer ch.Stop(context.Background())
+	clientConn, received, cleanup := newTestWebSocket(t)
+	defer cleanup()
+	pc := &webConn{id: "conn-1", conn: clientConn, sessionID: "sess-1"}
+	ch.addConnForTest(pc)
+	showTestQuestion(t, ch, nil)
+	mustReceiveWebMessage(t, received)
+
+	const resends = 20
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for range resends {
+			ch.resendQuestions(pc)
+		}
+	}()
+	ch.QuestionResolved(context.Background(), "web:sess-1", "q7k2mp", bus.QuestionAnswered)
+	wg.Wait()
+
+	resolved := false
+	for {
+		select {
+		case msg := <-received:
+			switch msg.Type {
+			case TypeQuestionResolved:
+				resolved = true
+			case TypeQuestionCreate:
+				if resolved {
+					t.Fatal("question.create after question.resolved")
+				}
+			}
+			continue
+		case <-time.After(300 * time.Millisecond):
+		}
+		break
+	}
+	if !resolved {
+		t.Fatal("no question.resolved")
+	}
+}
+
+// An answer the agent finds no longer waiting is refused as
+// question_not_waiting, not as an invalid answer.
+func TestQuestionAnswerToAGoneQuestionIsNotWaiting(t *testing.T) {
+	ch := newTestWebChannel(t)
+	if err := ch.Start(context.Background()); err != nil {
+		t.Fatalf("Start() error = %v", err)
+	}
+	defer ch.Stop(context.Background())
+	clientConn, received, cleanup := newTestWebSocket(t)
+	defer cleanup()
+	pc := &webConn{id: "conn-1", conn: clientConn, sessionID: "sess-1"}
+	ch.addConnForTest(pc)
+	showTestQuestion(t, ch, channels.ErrQuestionNotWaiting)
+	mustReceiveWebMessage(t, received)
+
+	ch.handleMessage(pc, WebMessage{Type: TypeQuestionAnswer, ID: "req-1", Payload: map[string]any{
+		PayloadKeyQuestionID: "q7k2mp", PayloadKeyAnswers: []any{map[string]any{"selected": []any{"Red"}}},
+	}})
+	if refused := mustReceiveWebMessage(t, received); refused.Payload["code"] != "question_not_waiting" {
+		t.Fatalf("refusal = %+v, want question_not_waiting", refused)
+	}
 }
 
 func TestQuestionAnswerFromANonOwnerIsRefused(t *testing.T) {

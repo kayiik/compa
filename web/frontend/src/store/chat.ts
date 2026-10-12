@@ -187,7 +187,10 @@ export function upsertQuestion(sessionId: string, question: PendingQuestion) {
     const next =
       index >= 0
         ? list.map((q, i) =>
-            i === index ? { ...question, requestId: q.requestId } : q,
+            // A re-send (after a reconnect) waits afresh: nothing is in flight.
+            i === index
+              ? { ...question, requestId: undefined, error: undefined }
+              : q,
           )
         : [...list, question]
     return {
@@ -204,6 +207,16 @@ export function removeQuestion(sessionId: string, questionId: string) {
     const next = list.filter((q) => q.questionId !== questionId)
     if (next.length > 0) questionsBySession[sessionId] = next
     else delete questionsBySession[sessionId]
+    return { questionsBySession }
+  })
+}
+
+/** Drops a session's questions; the server re-sends those still waiting. */
+export function clearSessionQuestions(sessionId: string) {
+  updateChatStore((prev) => {
+    if (!prev.questionsBySession[sessionId]) return {}
+    const questionsBySession = { ...prev.questionsBySession }
+    delete questionsBySession[sessionId]
     return { questionsBySession }
   })
 }

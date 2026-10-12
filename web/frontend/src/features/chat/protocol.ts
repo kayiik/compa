@@ -330,6 +330,11 @@ export function handleWebChatMessage(
       // A refused answer or cancel shows on its card; the turn still waits.
       const asked = requestId ? findQuestionByRequest(requestId) : undefined
       if (asked) {
+        // Already answered, cancelled or expired: the card is stale.
+        if (payload.code === "question_not_waiting") {
+          removeQuestion(asked.sessionId, asked.question.questionId)
+          break
+        }
         patchQuestion(asked.sessionId, asked.question.questionId, {
           error:
             errorMessage ||
