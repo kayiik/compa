@@ -8,6 +8,13 @@ import (
 	"github.com/kayiik/compa/pkg/config"
 )
 
+// GlobalDir returns the folder of the skills every workspace's agent sees:
+// skills in Compa's home. The agent, the web API, evolution and the CLI all
+// use it and BuiltinDir, so they agree on which skills there are.
+func GlobalDir() string {
+	return filepath.Join(config.GetHome(), "skills")
+}
+
 // BuiltinDir returns the directory built-in skills are loaded from:
 // $COMPA_BUILTIN_SKILLS when set, otherwise a skills folder installed next to
 // the executable, otherwise "" (none). The bundled default skills reach the

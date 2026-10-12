@@ -1,12 +1,9 @@
 package evolution
 
 import (
-	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 
-	"github.com/kayiik/compa/pkg/config"
 	"github.com/kayiik/compa/pkg/skills"
 )
 
@@ -16,19 +13,10 @@ type SkillsRecaller struct {
 }
 
 func NewSkillsRecaller(workspace string) *SkillsRecaller {
-	builtinSkillsDir := strings.TrimSpace(os.Getenv(config.EnvBuiltinSkills))
-	if builtinSkillsDir == "" {
-		wd, err := os.Getwd()
-		if err != nil {
-			wd = config.GetHome()
-		}
-		builtinSkillsDir = filepath.Join(wd, "skills")
-	}
 
-	globalSkillsDir := filepath.Join(config.GetHome(), "skills")
 	return &SkillsRecaller{
 		workspace: workspace,
-		loader:    skills.NewSkillsLoader(workspace, globalSkillsDir, builtinSkillsDir),
+		loader:    skills.NewSkillsLoader(workspace, skills.GlobalDir(), skills.BuiltinDir()),
 	}
 }
 

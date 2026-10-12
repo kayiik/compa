@@ -525,11 +525,7 @@ func (h *Handler) handleDeleteSkill(w http.ResponseWriter, r *http.Request) {
 }
 
 func newSkillsLoader(workspace string) *skills.SkillsLoader {
-	return skills.NewSkillsLoader(
-		workspace,
-		filepath.Join(globalConfigDir(), "skills"),
-		builtinSkillsDir(),
-	)
+	return skills.NewSkillsLoader(workspace, skills.GlobalDir(), skills.BuiltinDir())
 }
 
 func newSkillsRegistryManager(cfg *config.Config) *skills.RegistryManager {
@@ -1100,15 +1096,4 @@ func loadSkillContent(path string) (string, error) {
 
 func globalConfigDir() string {
 	return config.GetHome()
-}
-
-func builtinSkillsDir() string {
-	if path := os.Getenv(config.EnvBuiltinSkills); path != "" {
-		return path
-	}
-	wd, err := os.Getwd()
-	if err != nil {
-		return ""
-	}
-	return filepath.Join(wd, "skills")
 }

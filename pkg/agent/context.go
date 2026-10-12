@@ -114,7 +114,7 @@ func getGlobalConfigDir() string {
 // globalSkillsDir is the folder of the skills every workspace's agent sees,
 // $COMPA_HOME/skills.
 func globalSkillsDir() string {
-	return filepath.Join(getGlobalConfigDir(), "skills")
+	return skills.GlobalDir()
 }
 
 func NewContextBuilder(workspace string) *ContextBuilder {
