@@ -20,6 +20,7 @@ compa [options] [config.json]
 |---|---|
 | `-port <port>` | Port to listen on (default 18800). |
 | `-host <host>` | Host to listen on; overrides `-public`. |
+| `-allowed-hosts <names>` | Names and addresses, separated by commas, the web UI also answers to, for this run. |
 | `-public` | Listen on all interfaces instead of localhost only. Read [LAN access](install.md#lan-access) first. |
 | `-no-browser` | Don't open the browser on startup. |
 | `-console` | Run in the terminal, without the tray icon. |
@@ -257,6 +258,8 @@ keeps its task and pattern records for 30 days.
 | `COMPA_HOME` | Folder for settings and data instead of `~/.compa`. |
 | `COMPA_CONFIG` | Config file to use instead of `config.json` in that folder. |
 | `COMPA_LAUNCHER_HOST` | Address the web UI listens on, as `-host` sets it; `-host` wins when you give both. It overrides `-public` and **Enable LAN Access**, so an address other than localhost opens the web UI to the network; read [LAN access](install.md#lan-access) first. |
+| `COMPA_DASHBOARD_PASSWORD_FILE` | File holding the first dashboard password, such as a Docker or Kubernetes secret. `compa` uses it only while no password is set, and refuses to start if the file can't be read or the password is too short. |
+| `COMPA_ALLOWED_HOSTS` | Names and addresses, separated by commas, the web UI answers to besides the saved **Allowed Hosts**, for as long as `compa` runs; `-allowed-hosts` adds more. |
 | `COMPA_BINARY` | The `compa-kernel` that `compa` runs, instead of the one beside it. |
 | `COMPA_GATEWAY_HOST`, `COMPA_GATEWAY_PORT` | Address and port of the gateway, instead of `gateway.host` and `gateway.port`. |
 | `COMPA_LOG_LEVEL` | Log level, instead of `gateway.log_level`: `debug`, `info`, `warn` (the default), `error` or `fatal`. |

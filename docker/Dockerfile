@@ -7,9 +7,9 @@
 #   docker buildx build -f docker/Dockerfile --platform linux/amd64,linux/arm64 .
 #
 # Compa listens on all addresses here, which it does only once a dashboard
-# password is set, so set one first:
-#   docker run --rm -it -v compa-data:/data ghcr.io/kayiik/compa -password -
-#   docker run -d -p 18800:18800 -v compa-data:/data ghcr.io/kayiik/compa
+# password is set: give the first one in a file, as a secret, with
+# COMPA_DASHBOARD_PASSWORD_FILE, and the names it is reached by in
+# COMPA_ALLOWED_HOSTS. See docs/install.md, Run in a container.
 FROM debian:stable-slim
 RUN apt-get update \
 	&& apt-get install -y --no-install-recommends ca-certificates curl sqlite3 tini \

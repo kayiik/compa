@@ -144,20 +144,25 @@ ssh -L 18800:127.0.0.1:18800 you@the-computer-running-compa
 Each release also publishes the image `ghcr.io/kayiik/compa`, for linux/amd64
 and linux/arm64. It runs `compa` as a non-root user, listening on all
 addresses on port 18800, with its data in `/data`. Compa listens beyond this
-computer only once a dashboard password is set, so set one first:
+computer only once a dashboard password is set. Give it the first one in a
+file, such as a Docker secret, with `COMPA_DASHBOARD_PASSWORD_FILE`; it is
+used only while no password is set:
 
 ```sh
-docker run --rm -it -v compa-data:/data ghcr.io/kayiik/compa -password -
-docker run -d --name compa -p 18800:18800 -v compa-data:/data ghcr.io/kayiik/compa
+docker run -d --name compa -p 18800:18800 -v compa-data:/data \
+  -v ./password:/run/secrets/compa-password:ro \
+  -e COMPA_DASHBOARD_PASSWORD_FILE=/run/secrets/compa-password \
+  ghcr.io/kayiik/compa
 ```
 
-In a script, pipe the password in: `printf '%s\n' "$PASSWORD" | docker run
---rm -i -v compa-data:/data ghcr.io/kayiik/compa -password -`.
+Or set it once before the first start:
+`docker run --rm -it -v compa-data:/data ghcr.io/kayiik/compa -password -`.
 
 Then open http://localhost:18800 on that computer. Compa answers only the
-names it knows, so add every other name or address you reach it by, such as
-the computer's address or a reverse proxy's host name, to **Config** → **Compa
-app** → **Allowed Hosts**, or to `allowed_hosts` in `/data/launcher-config.json`.
+names it knows, so give every other name or address you reach it by, such as
+the computer's address or a reverse proxy's host name, in
+`COMPA_ALLOWED_HOSTS` (comma-separated, for as long as it runs) or in
+**Config** → **Compa app** → **Allowed Hosts** (saved).
 The container runs as uid 10001: a named volume works as it is, while a host
 folder mounted at `/data` must belong to that uid (`chown 10001:10001`).
 Update by pulling the new image and starting the container again;
