@@ -35,14 +35,7 @@ Thumbs.db
 # Local dev state: installed module binaries and workspace
 /.local/
 
-# Frontend build output and deps
-/web/frontend/node_modules/
-/web/backend/dist/assets/
-/web/backend/dist/index.html
-/web/backend/dist/*.svg
-/web/backend/dist/*.webmanifest
-/web/backend/dist/*.ico
-/web/backend/dist/*.png
+# Frontend package store
 /web/frontend/.pnpm-store/
 
 # Local build output and tooling state, never committed.

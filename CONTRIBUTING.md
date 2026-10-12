@@ -6,7 +6,7 @@ on it; report security problems as [SECURITY.md](SECURITY.md) describes.
 ## Tools
 
 - Go 1.26.9, the version in `go.mod`.
-- Node.js 22.13 or later, and pnpm, the version `packageManager` pins in
+- Node.js 20.19+, 22.13+ or 24+, and pnpm, the version `packageManager` pins in
   `web/frontend/package.json`.
 - For the checks: [golangci-lint](https://golangci-lint.run) v2.14.0,
   shellcheck and PSScriptAnalyzer; PowerShell 7 runs the Windows installer's

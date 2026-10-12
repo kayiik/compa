@@ -2,3 +2,5 @@
 **/node_modules
 web/frontend/dist
 web/backend/dist
+build/
+web/frontend/.pnpm-store

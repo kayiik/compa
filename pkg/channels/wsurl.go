@@ -11,7 +11,7 @@ import (
 // CheckWebSocketURL refuses an unencrypted ws:// connection to a host outside
 // this computer and its local network: a channel's token and every message
 // would cross the internet in clear text. wss:// is accepted. setting names
-// the URL in errors, such as "OneBot ws_url".
+// the URL in errors, such as "<channel> ws_url".
 func CheckWebSocketURL(ctx context.Context, rawURL, setting string) error {
 	u, err := url.Parse(strings.TrimSpace(rawURL))
 	if err != nil {

@@ -328,7 +328,7 @@ func inferMediaType(filename, contentType string) string {
 	fn := strings.ToLower(filename)
 
 	// SVG is an image MIME type, but raster-only delivery endpoints such as
-	// Telegram SendPhoto reject it. Treat it as a file/document instead.
+	// photo-send APIs reject it. Treat it as a file/document instead.
 	if strings.HasPrefix(ct, "image/svg") || filepath.Ext(fn) == ".svg" {
 		return "file"
 	}

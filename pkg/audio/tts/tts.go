@@ -26,7 +26,7 @@ type ttsAudioMetaProvider interface {
 }
 
 // DefaultResponseFormat is the audio format channels request when Options
-// do not name one: Ogg Opus, which Discord voice playback and chat voice
+// do not name one: Ogg Opus, which chat voice
 // messages need. A provider that cannot return it returns its own format,
 // which the stream reports.
 const DefaultResponseFormat = "opus"

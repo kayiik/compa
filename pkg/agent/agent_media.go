@@ -269,7 +269,7 @@ func buildPathTag(mime, localPath string) string {
 // placeholder formats — [image], [image: photo], [image: filename.jpg] — so we
 // match all of them via regex while leaving path tags ([image:/path]) untouched.
 //
-// When content is structured data (e.g., JSON from Feishu interactive cards or
+// When content is structured data (e.g., JSON from interactive cards or
 // post messages), tags are only injected via placeholder replacement — never
 // appended — to avoid corrupting the payload.
 func injectPathTags(content string, tags []string) string {

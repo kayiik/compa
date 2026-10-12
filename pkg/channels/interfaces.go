@@ -53,7 +53,7 @@ type PlaceholderCapable interface {
 
 // StreamingCapable — channels that can show partial LLM output in real-time.
 // The channel SHOULD gracefully degrade if the platform rejects streaming
-// (e.g. Telegram bot without forum mode). In that case, Update becomes a no-op
+// (e.g. a bot lacking edit permission). In that case, Update becomes a no-op
 // and Finalize still delivers the final message.
 type StreamingCapable interface {
 	BeginStream(ctx context.Context, chatID string) (Streamer, error)
