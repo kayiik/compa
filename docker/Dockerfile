@@ -1,7 +1,7 @@
 # The image the release publishes as ghcr.io/kayiik/compa, for anyone who
 # hosts Compa: compa and the compa-kernel it runs, from the release build, as a
-# non-root user, with its data in /data. curl and sqlite3 are there for skills
-# that call them.
+# non-root user, with its data in /data. curl is there for skills that call it;
+# an install that needs more tools builds FROM this image.
 #
 # The release copies its linux binaries to bin/linux_<arch>/ before building:
 #   docker buildx build -f docker/Dockerfile --platform linux/amd64,linux/arm64 .
@@ -12,7 +12,7 @@
 # COMPA_ALLOWED_HOSTS. See docs/install.md, Run in a container.
 FROM debian:stable-slim
 RUN apt-get update \
-	&& apt-get install -y --no-install-recommends ca-certificates curl sqlite3 tini \
+	&& apt-get install -y --no-install-recommends ca-certificates curl tini \
 	&& rm -rf /var/lib/apt/lists/* \
 	&& useradd --system --uid 10001 --user-group --home-dir /data --no-create-home compa \
 	&& mkdir /data && chown compa:compa /data
