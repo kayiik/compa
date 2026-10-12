@@ -10,9 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"golang.org/x/term"
-
 	"github.com/kayiik/compa/cmd/compa-kernel/internal"
+	"github.com/kayiik/compa/cmd/compa-kernel/internal/apikey"
 	"github.com/kayiik/compa/pkg/auth"
 	"github.com/kayiik/compa/pkg/config"
 	"github.com/kayiik/compa/pkg/modelservice"
@@ -62,32 +61,15 @@ func authLoginCmd(provider string, prompt io.Writer) (loginResult, error) {
 // stdinIsTerminal and readHidden are variables so tests can stand in for a
 // terminal.
 var (
-	stdinIsTerminal = func(f *os.File) bool { return term.IsTerminal(int(f.Fd())) }
-	readHidden      = func(f *os.File) ([]byte, error) { return term.ReadPassword(int(f.Fd())) }
+	stdinIsTerminal = apikey.System.IsTerminal
+	readHidden      = apikey.System.ReadHidden
 )
 
 // readAPIKey reads the key without echoing it when stdin is a terminal, so it
 // doesn't stay on screen or in the scrollback; piped input is read as a line.
 // The prompt goes to out.
 func readAPIKey(provider string, in *os.File, out io.Writer) (string, error) {
-	if !stdinIsTerminal(in) {
-		cred, err := auth.LoginPasteTokenWithPrompt(provider, in, out)
-		if err != nil {
-			return "", err
-		}
-		return cred.AccessToken, nil
-	}
-	fmt.Fprintf(out, "Paste your %s API key (input hidden): ", provider)
-	raw, err := readHidden(in)
-	fmt.Fprintln(out)
-	if err != nil {
-		return "", fmt.Errorf("reading key: %w", err)
-	}
-	key := strings.TrimSpace(string(raw))
-	if key == "" {
-		return "", fmt.Errorf("token cannot be empty")
-	}
-	return key, nil
+	return apikey.Read(provider, in, out, apikey.Terminal{IsTerminal: stdinIsTerminal, ReadHidden: readHidden})
 }
 
 func connectProvider(provider, key string) (loginResult, error) {

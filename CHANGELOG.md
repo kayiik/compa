@@ -3,6 +3,15 @@
 Notable changes to Compa, newest first. Versions follow
 [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Added
+
+- `compa-kernel model instances`, `add`, `update`, `remove`, `sync`,
+  `catalogs` and `models` manage provider instances and their catalogs from
+  the command line, with `--json`, as the Models page does; the API key is
+  read from stdin only. See [CLI](docs/cli.md#model).
+
 ## 0.0.2 - 2026-10-11
 
 ### Added

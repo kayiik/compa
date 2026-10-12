@@ -1,63 +1,23 @@
 package api
 
 import (
-	"strings"
-
 	"github.com/kayiik/compa/pkg/config"
+	"github.com/kayiik/compa/pkg/modelservice"
 )
 
-// redactedProxyPassword replaces the password of a proxy URL in every API
-// response. Sending the redacted URL back unchanged keeps the stored proxy.
-const redactedProxyPassword = "****"
-
 // redactProxyURL returns raw with the password of its userinfo replaced by
-// redactedProxyPassword. URLs without a password come back unchanged.
-func redactProxyURL(raw string) string {
-	trimmed := strings.TrimSpace(raw)
-	schemeEnd := strings.Index(trimmed, "://")
-	if schemeEnd < 0 {
-		return raw
-	}
-	authorityStart := schemeEnd + 3
-	authority := trimmed[authorityStart:]
-	if end := strings.IndexAny(authority, "/?#"); end >= 0 {
-		authority = authority[:end]
-	}
-	at := strings.LastIndex(authority, "@")
-	if at < 0 {
-		return raw
-	}
-	user, _, hasPassword := strings.Cut(authority[:at], ":")
-	if !hasPassword {
-		return raw
-	}
-	return trimmed[:authorityStart] + user + ":" + redactedProxyPassword + trimmed[authorityStart+at:]
-}
+// modelservice.RedactedProxyPassword. URLs without a password come back unchanged.
+func redactProxyURL(raw string) string { return modelservice.RedactProxyURL(raw) }
 
 // redactProviderInstanceRuntime returns a copy of runtime safe to show.
 func redactProviderInstanceRuntime(runtime *config.ProviderInstanceRuntime) *config.ProviderInstanceRuntime {
-	clone := cloneProviderInstanceRuntime(runtime)
-	if clone != nil {
-		clone.Proxy = redactProxyURL(clone.Proxy)
-	}
-	return clone
+	return modelservice.RedactRuntime(runtime)
 }
 
 // keepRedactedProxy restores the stored proxy when incoming carries exactly the
-// redacted form of it, so a round-tripped form keeps the secret. Any other
-// value, including a new password, replaces the stored proxy.
+// redacted form of it (see modelservice.KeepRedactedProxy).
 func keepRedactedProxy(incoming, stored *config.ProviderInstanceRuntime) {
-	if incoming == nil || stored == nil {
-		return
-	}
-	proxy := strings.TrimSpace(incoming.Proxy)
-	storedProxy := strings.TrimSpace(stored.Proxy)
-	if proxy == "" || storedProxy == "" {
-		return
-	}
-	if redacted := redactProxyURL(storedProxy); redacted != storedProxy && proxy == redacted {
-		incoming.Proxy = storedProxy
-	}
+	modelservice.KeepRedactedProxy(incoming, stored)
 }
 
 // keepRedactedInstanceProxies applies keepRedactedProxy to every incoming
