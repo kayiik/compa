@@ -44,8 +44,9 @@ Ctrl+C.
 go test -p 1 ./...
 ```
 
-Run the Go tests one package at a time (`-p 1`), as CI does. CI runs them on
-Linux, Windows and macOS, and again with `-race` on Linux (`CGO_ENABLED=1`).
+Run the Go tests one package at a time (`-p 1`), and with `-race`
+(`CGO_ENABLED=1`) before a release. CI doesn't run them: it only checks
+formatting, `go.mod` and the doc links, so run the tests yourself.
 The tests don't use your Compa data: without `COMPA_HOME` they get a
 temporary folder instead of `~/.compa`, but a `COMPA_HOME` you set is used as
 it is.
@@ -73,16 +74,20 @@ Linux and `pwsh scripts/install/test-install.ps1` on Windows, where
 `make check` runs, without changing any file: `go mod tidy -diff`, formatting,
 `go vet`, golangci-lint with `.golangci.yml`, the doc links, and the Go and
 web UI tests (run `pnpm install --frozen-lockfile` in `web/frontend` first).
-CI also runs `govulncheck`; in `web/frontend`, `npx tsc -b`, `pnpm run lint`
-and `pnpm run format`, which checks the formatting with Prettier;
-`node brand/check.mjs` for the brand assets; and PSScriptAnalyzer on
+Before a release also run `govulncheck`; in `web/frontend`, `npx tsc -b`,
+`pnpm run lint` and `pnpm run format`, which checks the formatting with
+Prettier; `node brand/check.mjs` for the brand assets; and PSScriptAnalyzer on
 `install.ps1`. `make fmt` formats the Go code, and `pnpm run format:write` in
 `web/frontend` the web UI's.
 
-CI also writes the `THIRD_PARTY_NOTICES` a release ships, on Linux, Windows and
-macOS, with `scripts/notices.sh` (see `cmd/notices`). It fails when a Go module
-compiled into `compa` or `compa-kernel` has no license file, so check that a
-new dependency has one.
+The release writes the `THIRD_PARTY_NOTICES` it ships with `scripts/notices.sh`
+(see `cmd/notices`). It fails when a Go module compiled into `compa` or
+`compa-kernel` has no license file, so check that a new dependency has one.
+
+Releases start by hand: run the `release` workflow on main with the version,
+for example `gh workflow run release.yml -f version=v1.2.3`. It builds,
+checks that the kernel starts, publishes the release and the image, and runs
+no tests.
 
 ## Pull requests
 
