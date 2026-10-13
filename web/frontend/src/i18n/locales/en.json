@@ -104,6 +104,21 @@
     },
     "newChat": "New Chat",
     "notConnected": "The gateway isn't running. Start it from the status menu to chat.",
+    "question": {
+      "title_one": "{{count}} question for you",
+      "title_other": "{{count}} questions for you",
+      "chooseMany": "Choose any that apply",
+      "recommended": "Recommended",
+      "other": "Or type your own answer",
+      "otherPlaceholder": "Type your own answer",
+      "answered": "answered",
+      "tabs": "Questions",
+      "incomplete": "Answer every question to submit",
+      "submit": "Submit",
+      "cancel": "Cancel",
+      "sendFailed": "Couldn't send. Check the connection and try again.",
+      "next": "Next"
+    },
     "thinking": {
       "step1": "Thinking..."
     },

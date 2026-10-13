@@ -79,7 +79,7 @@ type DownloadOptions struct {
 const DefaultDownloadMaxBytes int64 = 100 << 20
 
 // LogSafeURL returns the scheme and host of raw, all a log line or an error
-// may show of a URL: its path and query may carry a token, as Telegram's
+// may show of a URL: its path and query may carry a token, as some bot APIs'
 // /file/bot<token>/ paths do.
 func LogSafeURL(raw string) string {
 	parsed, err := url.Parse(strings.TrimSpace(raw))

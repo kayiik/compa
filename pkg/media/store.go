@@ -28,7 +28,7 @@ const (
 type MediaMeta struct {
 	Filename      string
 	ContentType   string
-	Source        string        // "telegram", "discord", "tool:image-gen", etc.
+	Source        string        // "slack", "whatsapp", "tool:image-gen", etc.
 	CleanupPolicy CleanupPolicy // defaults to CleanupPolicyDeleteOnCleanup
 }
 

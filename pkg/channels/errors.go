@@ -23,6 +23,10 @@ var (
 	// ErrSendFailed indicates a permanent failure (e.g. invalid chat ID, 4xx non-429).
 	// Manager will not retry.
 	ErrSendFailed = errors.New("send failed")
+
+	// ErrQuestionNotWaiting is what a QuestionResponder returns when its
+	// question no longer waits: answered, cancelled or expired.
+	ErrQuestionNotWaiting = errors.New("this question is no longer waiting for an answer")
 )
 
 // RateLimitError is a rate-limit response that says how long to wait before

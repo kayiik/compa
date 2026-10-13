@@ -104,6 +104,21 @@
     },
     "newChat": "Novo Chat",
     "notConnected": "O Gateway não está rodando. Inicie-o para conversar.",
+    "question": {
+      "title_one": "{{count}} pergunta para você",
+      "title_other": "{{count}} perguntas para você",
+      "chooseMany": "Escolha todas que se aplicam",
+      "recommended": "Recomendado",
+      "other": "Ou digite sua própria resposta",
+      "otherPlaceholder": "Digite sua própria resposta",
+      "answered": "respondida",
+      "tabs": "Perguntas",
+      "incomplete": "Responda todas as perguntas para enviar",
+      "submit": "Enviar",
+      "cancel": "Cancelar",
+      "sendFailed": "Não foi possível enviar. Verifique a conexão e tente de novo.",
+      "next": "Próxima"
+    },
     "thinking": {
       "step1": "Pensando..."
     },

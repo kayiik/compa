@@ -1,13 +1,3 @@
-package moduleagent
-
-import (
-	"context"
-
-	"github.com/kayiik/compa/internal/moduletools"
-	"github.com/kayiik/compa/pkg/agent"
-	toolshared "github.com/kayiik/compa/pkg/tools/shared"
-)
-
 // Package moduleagent binds the detached-module host to the agent kernel.
 //
 // IT IS ITS OWN PACKAGE FOR A PACKAGING REASON, not a stylistic one. This
@@ -19,6 +9,15 @@ import (
 // Splitting it means the shell imports moduletools (management) and the
 // composition roots import moduleagent (wiring), so each binary carries only
 // what it uses.
+package moduleagent
+
+import (
+	"context"
+
+	"github.com/kayiik/compa/internal/moduletools"
+	"github.com/kayiik/compa/pkg/agent"
+	toolshared "github.com/kayiik/compa/pkg/tools/shared"
+)
 
 // Provider adapts the detached-module host to the kernel's ToolProvider door.
 //

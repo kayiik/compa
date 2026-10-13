@@ -5,9 +5,13 @@ import {
   newChatSession,
   sendChatMessage,
   sendChatMessageWhenReady,
+  sendQuestionAnswer,
+  sendQuestionCancel,
   switchChatSession,
 } from "@/features/chat/controller"
-import { chatAtom, setChatSelection } from "@/store/chat"
+import { type PendingQuestion, chatAtom, setChatSelection } from "@/store/chat"
+
+const EMPTY_QUESTIONS: PendingQuestion[] = []
 
 // Live messages carry Unix-millisecond numbers; history carries RFC 3339 strings.
 export function formatMessageTime(timestamp: number | string): string {
@@ -41,6 +45,7 @@ export function useWebChat() {
     contextUsage,
     selectionBySession,
     failedDraft,
+    questionsBySession,
   } = useAtomValue(chatAtom)
 
   return {
@@ -51,6 +56,9 @@ export function useWebChat() {
     activeSessionId,
     contextUsage,
     failedDraft,
+    questions: questionsBySession[activeSessionId] ?? EMPTY_QUESTIONS,
+    answerQuestion: sendQuestionAnswer,
+    cancelQuestion: sendQuestionCancel,
     selection: selectionBySession[activeSessionId] || "",
     setSelection: (selection: string) =>
       setChatSelection(activeSessionId, selection),

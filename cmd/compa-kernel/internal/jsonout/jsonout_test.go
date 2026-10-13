@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"testing"
 
@@ -105,5 +106,28 @@ func TestWriteErrorPrintsOneDocument(t *testing.T) {
 	}
 	if !bytes.Contains(out.Bytes(), []byte("<instance-id>")) {
 		t.Fatalf("output %q escapes < and >", out.String())
+	}
+}
+
+type detailedError struct{}
+
+func (detailedError) Error() string { return "blocked" }
+
+func (detailedError) JSONDetails() map[string]any {
+	return map[string]any{"routes": []string{"everyday"}, "error": "ignored"}
+}
+
+func TestWriteErrorCarriesTheDetails(t *testing.T) {
+	var out bytes.Buffer
+	if err := WriteError(&out, fmt.Errorf("remove: %w", detailedError{})); err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		Error  string   `json:"error"`
+		Routes []string `json:"routes"`
+	}
+	decodeOne(t, out.Bytes(), &doc)
+	if doc.Error != "remove: blocked" || len(doc.Routes) != 1 || doc.Routes[0] != "everyday" {
+		t.Fatalf("document = %+v", doc)
 	}
 }

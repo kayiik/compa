@@ -4,10 +4,8 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
-	"github.com/kayiik/compa/pkg/config"
 	"github.com/kayiik/compa/pkg/skills"
 )
 
@@ -65,18 +63,9 @@ type DefaultDraftGenerator struct {
 }
 
 func NewDefaultDraftGenerator(workspace string) *DefaultDraftGenerator {
-	builtinSkillsDir := strings.TrimSpace(os.Getenv(config.EnvBuiltinSkills))
-	if builtinSkillsDir == "" {
-		wd, err := os.Getwd()
-		if err != nil {
-			wd = config.GetHome()
-		}
-		builtinSkillsDir = filepath.Join(wd, "skills")
-	}
 
-	globalSkillsDir := filepath.Join(config.GetHome(), "skills")
 	return &DefaultDraftGenerator{
-		loader: skills.NewSkillsLoader(workspace, globalSkillsDir, builtinSkillsDir),
+		loader: skills.NewSkillsLoader(workspace, skills.GlobalDir(), skills.BuiltinDir()),
 	}
 }
 

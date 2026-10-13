@@ -1,18 +1,18 @@
 # The image the release publishes as ghcr.io/kayiik/compa, for anyone who
 # hosts Compa: compa and the compa-kernel it runs, from the release build, as a
-# non-root user, with its data in /data. curl and sqlite3 are there for skills
-# that call them.
+# non-root user, with its data in /data. curl is there for skills that call it;
+# an install that needs more tools builds FROM this image.
 #
 # The release copies its linux binaries to bin/linux_<arch>/ before building:
 #   docker buildx build -f docker/Dockerfile --platform linux/amd64,linux/arm64 .
 #
 # Compa listens on all addresses here, which it does only once a dashboard
-# password is set, so set one first:
-#   docker run --rm -it -v compa-data:/data ghcr.io/kayiik/compa -password -
-#   docker run -d -p 18800:18800 -v compa-data:/data ghcr.io/kayiik/compa
+# password is set: give the first one in a file, as a secret, with
+# COMPA_DASHBOARD_PASSWORD_FILE, and the names it is reached by in
+# COMPA_ALLOWED_HOSTS. See docs/install.md, Run in a container.
 FROM debian:stable-slim
 RUN apt-get update \
-	&& apt-get install -y --no-install-recommends ca-certificates curl sqlite3 tini \
+	&& apt-get install -y --no-install-recommends ca-certificates curl tini \
 	&& rm -rf /var/lib/apt/lists/* \
 	&& useradd --system --uid 10001 --user-group --home-dir /data --no-create-home compa \
 	&& mkdir /data && chown compa:compa /data

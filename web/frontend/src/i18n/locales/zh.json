@@ -104,6 +104,21 @@
     },
     "newChat": "新建对话",
     "notConnected": "服务未运行，请先启动以进行对话。",
+    "question": {
+      "title_one": "有 {{count}} 个问题需要你回答",
+      "title_other": "有 {{count}} 个问题需要你回答",
+      "chooseMany": "选择所有适用项",
+      "recommended": "推荐",
+      "other": "或输入你自己的回答",
+      "otherPlaceholder": "输入你自己的回答",
+      "answered": "已回答",
+      "tabs": "问题",
+      "incomplete": "回答所有问题后才能提交",
+      "submit": "提交",
+      "cancel": "取消",
+      "sendFailed": "发送失败。请检查连接后重试。",
+      "next": "下一个"
+    },
     "thinking": {
       "step1": "思考中..."
     },

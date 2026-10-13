@@ -4,6 +4,7 @@ package jsonout
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"strconv"
 	"strings"
@@ -67,7 +68,22 @@ func Write(w io.Writer, v any) error {
 	return enc.Encode(v)
 }
 
-// WriteError prints the document of a failed command: {"error": message}.
+// Detailer is an error whose JSON document carries more fields beside
+// "error", such as the routes that block removing a provider instance.
+type Detailer interface {
+	JSONDetails() map[string]any
+}
+
+// WriteError prints the document of a failed command: {"error": message},
+// with the fields of a Detailer in err's chain.
 func WriteError(w io.Writer, err error) error {
-	return Write(w, map[string]string{"error": err.Error()})
+	doc := map[string]any{}
+	var detailer Detailer
+	if errors.As(err, &detailer) {
+		for key, value := range detailer.JSONDetails() {
+			doc[key] = value
+		}
+	}
+	doc["error"] = err.Error()
+	return Write(w, doc)
 }

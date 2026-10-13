@@ -218,7 +218,7 @@ func (h *Handler) handleVoiceOptions(w http.ResponseWriter, r *http.Request) {
 		if slices.Contains(target.Surfaces, string(core.ModelSurfaceAudioSpeech)) {
 			tts = append(tts, option)
 		}
-		if slices.Contains(target.Surfaces, string(core.ModelSurfaceChatCompletions)) && target.audioInput {
+		if slices.Contains(target.Surfaces, string(core.ModelSurfaceChatCompletions)) && target.AudioInput {
 			chat = append(chat, option)
 		}
 	}

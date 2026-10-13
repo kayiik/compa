@@ -129,3 +129,58 @@ func TestTerminalChatPrintsOnlyChatMessagesForTheTerminal(t *testing.T) {
 		}
 	}
 }
+
+// While a question waits in the terminal's chat, the next line answers it at
+// once instead of queuing behind the turn that asked.
+func TestTerminalChatAnswersAQuestionWhileTheTurnWaits(t *testing.T) {
+	msgBus := bus.NewMessageBus()
+	defer msgBus.Close()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	answered := make(chan struct{})
+	var waiting sync.Mutex
+	questionOpen := false
+	var out syncBuffer
+	chat := newTerminalChat(func(input string) (string, error) {
+		switch input {
+		case "pick a color":
+			waiting.Lock()
+			questionOpen = true
+			waiting.Unlock()
+			_ = msgBus.PublishOutbound(context.Background(), bus.OutboundMessage{
+				Context: bus.NewOutboundContext(cliChannel, "direct", ""),
+				Content: "Compa asks:\n\nColor: Which?\n1. Red - warm\n2. Blue - cool",
+			})
+			select {
+			case <-answered:
+				return "blue it is", nil
+			case <-time.After(5 * time.Second):
+				return "no answer", nil
+			}
+		case "2":
+			waiting.Lock()
+			questionOpen = false
+			waiting.Unlock()
+			close(answered)
+			return "Got it, thanks.", nil
+		}
+		return "reply to " + input, nil
+	}, &out)
+	chat.questionWaiting = func() bool {
+		waiting.Lock()
+		defer waiting.Unlock()
+		return questionOpen
+	}
+	go chat.printPosted(ctx, msgBus.OutboundChan())
+
+	returnsSoon(t, "a turn that asked a question", func() { chat.handle("pick a color") })
+	returnsSoon(t, "the answer", func() { chat.handle("2") })
+	deadline := time.Now().Add(5 * time.Second)
+	for !strings.Contains(out.String(), "blue it is") && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if got := out.String(); !strings.Contains(got, "Got it, thanks.") || !strings.Contains(got, "blue it is") {
+		t.Fatalf("output = %q, want the answer taken and the turn finished", got)
+	}
+}

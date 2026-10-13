@@ -11,6 +11,10 @@ const (
 	TypeMessageSend = "message.send"
 	TypeMediaSend   = "media.send"
 	TypePing        = "ping"
+	// TypeQuestionAnswer answers, and TypeQuestionCancel cancels, a question
+	// the agent asked with question.create.
+	TypeQuestionAnswer = "question.answer"
+	TypeQuestionCancel = "question.cancel"
 
 	// TypeMessageCreate is sent from server to client.
 	TypeMessageCreate = "message.create"
@@ -23,8 +27,12 @@ const (
 	// session's messages; turn.end comes after every frame of the reply.
 	TypeTurnStart = "turn.start"
 	TypeTurnEnd   = "turn.end"
-	TypeError     = "error"
-	TypePong      = "pong"
+	// TypeQuestionCreate shows a question with choices; TypeQuestionResolved
+	// says it no longer waits.
+	TypeQuestionCreate   = "question.create"
+	TypeQuestionResolved = "question.resolved"
+	TypeError            = "error"
+	TypePong             = "pong"
 
 	PayloadKeyContent        = "content"
 	PayloadKeyKind           = "kind"
@@ -43,6 +51,14 @@ const (
 	// PayloadKeyError says why a turn that ended with error failed.
 	PayloadKeyStatus = "status"
 	PayloadKeyError  = "error"
+
+	// Question frames: the question's id, its questions, when it stops
+	// waiting (Unix milliseconds), how it ended, and the owner's answers.
+	PayloadKeyQuestionID = "question_id"
+	PayloadKeyQuestions  = "questions"
+	PayloadKeyExpiresAt  = "expires_at"
+	PayloadKeyOutcome    = "outcome"
+	PayloadKeyAnswers    = "answers"
 
 	MessageKindThought   = "thought"
 	MessageKindToolCalls = "tool_calls"

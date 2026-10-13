@@ -12,7 +12,7 @@ import (
 // Use it deferred at the top of every goroutine or callback a platform SDK
 // runs for an inbound event:
 //
-//	defer channels.RecoverPanic("wecom", "message")
+//	defer channels.RecoverPanic("slack", "message")
 func RecoverPanic(channel, where string) {
 	if r := recover(); r != nil {
 		logger.ErrorCF("channels", "Recovered from a panic while handling an event", map[string]any{

@@ -1,7 +1,8 @@
-# golangci-lint v2 settings, used by `make lint` and the lint job in
-# .github/workflows/ci.yml.
+# golangci-lint v2 settings, used by `make lint` and `make check` before a
+# release.
 #
-# Only checks the code already passes are on, so any new finding fails CI.
+# Only checks the code already passes are on, so any new finding fails the
+# check.
 # errcheck is off because about 900 unchecked errors predate this file; the
 # staticcheck checks turned off below have existing findings. Turn one on
 # once it is fixed.

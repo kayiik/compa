@@ -115,6 +115,8 @@ type AgentLoop struct {
 
 	// approvals holds the tool calls waiting for the owner's /approve.
 	approvals *ownerApprovals
+	// questions holds the ask_user questions waiting for the owner's answers.
+	questions *ownerQuestions
 	// approvalSeq numbers the asks of the approval policy, for the ids of
 	// their approval events.
 	approvalSeq atomic.Uint64

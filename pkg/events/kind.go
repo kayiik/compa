@@ -114,6 +114,12 @@ const (
 	KindApprovalRequested Kind = "approval.requested"
 	// KindApprovalResolved is emitted when an approval request is decided.
 	KindApprovalResolved Kind = "approval.resolved"
+	// KindQuestionRequested is emitted when the agent asks the owner
+	// questions (the ask_user tool), before the hooks or the owner answer.
+	KindQuestionRequested Kind = "question.requested"
+	// KindQuestionResolved is emitted when the questions are answered,
+	// cancelled, expire, or the turn ends first.
+	KindQuestionResolved Kind = "question.resolved"
 )
 
 var knownKinds = []Kind{
@@ -167,6 +173,8 @@ var knownKinds = []Kind{
 	KindArtifactProduced,
 	KindApprovalRequested,
 	KindApprovalResolved,
+	KindQuestionRequested,
+	KindQuestionResolved,
 }
 
 // KnownKinds returns the runtime event kinds declared by this package.

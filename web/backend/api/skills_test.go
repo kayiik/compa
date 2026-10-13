@@ -1869,3 +1869,27 @@ func buildSkillZip(t *testing.T, files map[string]string) []byte {
 	}
 	return buf.Bytes()
 }
+
+// The skills page lists the skills the agent loads: built-ins come from
+// beside the program (or COMPA_BUILTIN_SKILLS), never from the folder Compa
+// was started in.
+func TestSkillsLoaderIgnoresTheWorkingDirectory(t *testing.T) {
+	t.Setenv(config.EnvHome, t.TempDir())
+	t.Setenv(config.EnvBuiltinSkills, "")
+	cwd := t.TempDir()
+	planted := filepath.Join(cwd, "skills", "planted")
+	if err := os.MkdirAll(planted, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(planted, "SKILL.md"),
+		[]byte("---\nname: planted\ndescription: planted\n---\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(cwd)
+
+	for _, info := range newSkillsLoader(t.TempDir()).ListSkills() {
+		if info.Name == "planted" {
+			t.Fatalf("the working directory's skill was listed: %+v", info)
+		}
+	}
+}

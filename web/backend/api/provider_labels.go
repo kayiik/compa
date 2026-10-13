@@ -10,6 +10,7 @@ import (
 	coreproviders "github.com/kayiik/llmgw-core/providers"
 
 	"github.com/kayiik/compa/pkg/config"
+	"github.com/kayiik/compa/pkg/modelservice"
 )
 
 // Credential kinds a provider instance reports: what it signs in with.
@@ -28,19 +29,7 @@ const managedByExtension = "extension"
 // extension instance's provider as the daemon names it, the core registry's
 // label of a registry provider kind, else the instance's id.
 func providerInstanceDisplayName(instance *config.ProviderInstanceConfig) string {
-	if instance == nil {
-		return ""
-	}
-	if instance.ExtensionProvider() != "" {
-		if name, _ := instance.Settings[config.ExtensionDisplayNameSetting].(string); strings.TrimSpace(name) != "" {
-			return strings.TrimSpace(name)
-		}
-		return instance.ID
-	}
-	if entry, ok := coreproviders.RegistryProvider(strings.TrimSpace(instance.ProviderKind)); ok && strings.TrimSpace(entry.Label) != "" {
-		return strings.TrimSpace(entry.Label)
-	}
-	return instance.ID
+	return modelservice.InstanceDisplayName(instance)
 }
 
 // providerInstanceManagedBy is what manages an instance: "extension" for one

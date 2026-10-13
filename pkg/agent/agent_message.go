@@ -29,12 +29,19 @@ func (al *AgentLoop) buildContinuationTarget(msg bus.InboundMessage) (*continuat
 const terminalChannel = "cli"
 
 // ProcessDirect runs content as a turn of the terminal's user, the owner:
-// the CLI's direct and interactive modes.
+// the CLI's direct and interactive modes. While a question waits in the
+// terminal's chat, content answers it instead: the terminal calls this as the
+// asking turn waits, never through the receive loop.
 func (al *AgentLoop) ProcessDirect(
 	ctx context.Context,
 	content, sessionKey string,
 ) (string, error) {
-	return al.processDirect(ctx, content, sessionKey, terminalChannel, "direct")
+	msg := directMessage(content, sessionKey, terminalChannel, "direct")
+	if reply, handled := al.questionReply(ctx, bus.NormalizeInboundMessage(msg)); handled {
+		return reply, nil
+	}
+	al.prepareExtensions(ctx)
+	return al.processMessage(ctx, msg)
 }
 
 // ProcessDirectWithChannel runs a scheduled job's message as a turn for the
@@ -44,16 +51,12 @@ func (al *AgentLoop) ProcessDirectWithChannel(
 	ctx context.Context,
 	content, sessionKey, channel, chatID string,
 ) (string, error) {
-	return al.processDirect(withScheduledTurn(ctx), content, sessionKey, channel, chatID)
+	al.prepareExtensions(ctx)
+	return al.processMessage(withScheduledTurn(ctx), directMessage(content, sessionKey, channel, chatID))
 }
 
-func (al *AgentLoop) processDirect(
-	ctx context.Context,
-	content, sessionKey, channel, chatID string,
-) (string, error) {
-	al.prepareExtensions(ctx)
-
-	msg := bus.InboundMessage{
+func directMessage(content, sessionKey, channel, chatID string) bus.InboundMessage {
+	return bus.InboundMessage{
 		Context: bus.InboundContext{
 			Channel:  channel,
 			ChatID:   chatID,
@@ -63,8 +66,6 @@ func (al *AgentLoop) processDirect(
 		Content:    content,
 		SessionKey: sessionKey,
 	}
-
-	return al.processMessage(ctx, msg)
 }
 
 func (al *AgentLoop) ProcessHeartbeat(
@@ -156,6 +157,10 @@ func (al *AgentLoop) processMessage(ctx context.Context, msg bus.InboundMessage)
 			resetter.ResetSentInRound(opts.Dispatch.SessionKey)
 		}
 	}
+
+	// The owner's answer to a waiting question is taken before a message
+	// queues (dispatchInbound) or by ProcessDirect, never here: a message
+	// queued before a question opened is a message, not its answer.
 
 	// context-dependent commands check their own Runtime fields and report
 	// "unavailable" when the required capability is nil.

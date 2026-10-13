@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/kayiik/compa/pkg/approval"
+	"github.com/kayiik/compa/pkg/bus"
 	runtimeevents "github.com/kayiik/compa/pkg/events"
 	"github.com/kayiik/compa/pkg/logger"
 	"github.com/kayiik/compa/pkg/providers"
@@ -112,6 +113,83 @@ func toolApprover(reg HookRegistration) (ToolApprover, bool) {
 		return nil, false
 	}
 	return approver, true
+}
+
+// QuestionAnswerer answers the questions the agent asks the owner with the
+// ask_user tool, before the owner is asked. It may answer them, cancel them,
+// or pass, leaving them to the owner.
+type QuestionAnswerer interface {
+	AnswerQuestion(ctx context.Context, req *QuestionRequest) (QuestionDecision, error)
+}
+
+// optionalQuestionAnswerer is implemented by hooks that have AnswerQuestion
+// but answer only when configured to, as a process hook does with intercept
+// "answer_question".
+type optionalQuestionAnswerer interface {
+	answersQuestions() bool
+}
+
+func questionAnswerer(reg HookRegistration) (QuestionAnswerer, bool) {
+	answerer, ok := reg.Hook.(QuestionAnswerer)
+	if !ok {
+		return nil, false
+	}
+	if optional, ok := reg.Hook.(optionalQuestionAnswerer); ok && !optional.answersQuestions() {
+		return nil, false
+	}
+	return answerer, true
+}
+
+// QuestionRequest is a set of questions the agent asks the owner.
+type QuestionRequest struct {
+	Meta    HookMeta     `json:"meta"`
+	Context *TurnContext `json:"context,omitempty"`
+	// QuestionID pairs the request with its question events.
+	QuestionID string         `json:"question_id"`
+	Questions  []bus.Question `json:"questions"`
+}
+
+func (r *QuestionRequest) Clone() *QuestionRequest {
+	if r == nil {
+		return nil
+	}
+	cloned := *r
+	cloned.Meta = cloneHookMeta(r.Meta)
+	cloned.Context = cloneTurnContext(r.Context)
+	cloned.Questions = cloneQuestions(r.Questions)
+	return &cloned
+}
+
+func cloneQuestions(questions []bus.Question) []bus.Question {
+	if questions == nil {
+		return nil
+	}
+	cloned := make([]bus.Question, len(questions))
+	for i, q := range questions {
+		cloned[i] = q
+		cloned[i].Options = slices.Clone(q.Options)
+	}
+	return cloned
+}
+
+// QuestionAction is what a QuestionAnswerer does with a request.
+type QuestionAction string
+
+const (
+	// QuestionActionPass leaves the questions to the next answerer, and at
+	// last to the owner. An empty action passes.
+	QuestionActionPass QuestionAction = "pass"
+	// QuestionActionAnswer answers them with Answers, one per question.
+	QuestionActionAnswer QuestionAction = "answer"
+	// QuestionActionCancel cancels them: the model is told so.
+	QuestionActionCancel QuestionAction = "cancel"
+)
+
+// QuestionDecision is a QuestionAnswerer's decision.
+type QuestionDecision struct {
+	Action  QuestionAction       `json:"action"`
+	Answers []bus.QuestionAnswer `json:"answers,omitempty"`
+	Reason  string               `json:"reason,omitempty"`
 }
 
 type LLMHookRequest struct {
@@ -624,6 +702,84 @@ func (hm *HookManager) ApproveTool(ctx context.Context, req *ToolApprovalRequest
 	}
 
 	return ApprovalDecision{Approved: decided}, decided
+}
+
+// AnswerQuestion asks every registered question answerer, in order, about
+// req's questions: the first that answers or cancels decides. One that
+// passes, fails, times out or answers what doesn't fit the questions is
+// skipped, leaving the questions to the next and at last to the owner, as
+// asking the owner is always safe. decided is false then; name is the
+// deciding hook's name.
+func (hm *HookManager) AnswerQuestion(
+	ctx context.Context,
+	req *QuestionRequest,
+) (decision QuestionDecision, name string, decided bool) {
+	if hm == nil || req == nil {
+		return QuestionDecision{}, "", false
+	}
+	for _, reg := range hm.snapshotHooks() {
+		answerer, ok := questionAnswerer(reg)
+		if !ok {
+			continue
+		}
+		answer, ok := hm.callAnswerQuestion(ctx, reg.Name, answerer, req.Clone())
+		if !ok {
+			continue
+		}
+		switch answer.Action {
+		case QuestionActionCancel:
+			return answer, reg.Name, true
+		case QuestionActionAnswer:
+			if err := validateQuestionAnswers(req.Questions, answer.Answers); err != nil {
+				logger.WarnCF("hooks", "Question hook answered what doesn't fit the questions; skipping it",
+					map[string]any{"hook": reg.Name, "error": err.Error()})
+				continue
+			}
+			return answer, reg.Name, true
+		case "", QuestionActionPass:
+		default:
+			hm.logUnsupportedAction(reg.Name, "answer_question", HookAction(answer.Action))
+		}
+	}
+	return QuestionDecision{}, "", false
+}
+
+func (hm *HookManager) callAnswerQuestion(
+	parent context.Context,
+	name string,
+	answerer QuestionAnswerer,
+	req *QuestionRequest,
+) (QuestionDecision, bool) {
+	ctx, cancel := context.WithTimeout(parent, hm.approvalTimeoutValue())
+	defer cancel()
+	type result struct {
+		decision QuestionDecision
+		err      error
+	}
+	done := make(chan result, 1)
+	go func() {
+		decision, err := answerer.AnswerQuestion(ctx, req)
+		done <- result{decision: decision, err: err}
+	}()
+	select {
+	case res := <-done:
+		if res.err != nil {
+			logger.WarnCF("hooks", "Question hook failed; passing", map[string]any{
+				"hook":     name,
+				"error":    res.err.Error(),
+				"failures": hm.failures.Add(1),
+			})
+			return QuestionDecision{}, false
+		}
+		return res.decision, true
+	case <-ctx.Done():
+		logger.WarnCF("hooks", "Question hook timed out; passing", map[string]any{
+			"hook":       name,
+			"timeout_ms": hm.approvalTimeoutValue().Milliseconds(),
+			"failures":   hm.failures.Add(1),
+		})
+		return QuestionDecision{}, false
+	}
 }
 
 func (hm *HookManager) rebuildOrdered() {

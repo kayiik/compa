@@ -5,12 +5,10 @@ package agent
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
-	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -61,79 +59,38 @@ const (
 	approvalUnavailable
 )
 
-// ownerApprovals holds the requests waiting for the owner's answer.
+// ownerApprovals holds the requests waiting for the owner's answer, in the
+// owner's prompts (operatorPrompts).
 type ownerApprovals struct {
-	mu      sync.Mutex
-	pending map[string]chan bool
+	prompts *operatorPrompts
 	timeout time.Duration
 }
 
-func newOwnerApprovals() *ownerApprovals {
-	return &ownerApprovals{pending: make(map[string]chan bool), timeout: ownerApprovalTimeout}
+func newOwnerApprovals(prompts *operatorPrompts) *ownerApprovals {
+	return &ownerApprovals{prompts: prompts, timeout: ownerApprovalTimeout}
 }
 
 // ask registers a request under a new id, posts it through post and waits
 // for the owner's answer, the timeout, or the end of ctx.
 func (a *ownerApprovals) ask(ctx context.Context, post func(id string) error) (approvalOutcome, error) {
-	answer := make(chan bool, 1)
-	a.mu.Lock()
-	id := a.newIDLocked()
-	a.pending[id] = answer
-	timeout := a.timeout
-	a.mu.Unlock()
-	defer func() {
-		a.mu.Lock()
-		delete(a.pending, id)
-		a.mu.Unlock()
-	}()
-
-	if err := post(id); err != nil {
-		return approvalUnavailable, err
-	}
-
-	timer := time.NewTimer(timeout)
-	defer timer.Stop()
-	select {
-	case approved := <-answer:
-		if approved {
+	answer, outcome, err := a.prompts.wait(ctx, &operatorPrompt{kind: promptApproval}, a.timeout, post)
+	switch outcome {
+	case promptAnswered:
+		if answer.approve {
 			return approvalGranted, nil
 		}
 		return approvalRefused, nil
-	case <-timer.C:
+	case promptExpired:
 		return approvalExpired, nil
-	case <-ctx.Done():
-		return approvalUnavailable, ctx.Err()
+	default:
+		return approvalUnavailable, err
 	}
 }
 
 // answer delivers the owner's answer to request id. It reports false when no
 // request of that id is waiting: unknown, already answered or expired.
 func (a *ownerApprovals) answer(id string, approve bool) bool {
-	id = strings.ToLower(strings.TrimSpace(id))
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	answer, ok := a.pending[id]
-	if !ok {
-		return false
-	}
-	delete(a.pending, id)
-	answer <- approve // buffered: the waiter takes it, or has stopped waiting
-	return true
-}
-
-// newIDLocked returns an id no waiting request has. Must be called with the
-// lock held.
-func (a *ownerApprovals) newIDLocked() string {
-	for {
-		buf := make([]byte, approvalIDLength)
-		_, _ = rand.Read(buf)
-		for i, b := range buf {
-			buf[i] = approvalIDAlphabet[int(b)%len(approvalIDAlphabet)]
-		}
-		if id := string(buf); a.pending[id] == nil {
-			return id
-		}
-	}
+	return a.prompts.deliver(id, promptApproval, promptAnswer{approve: approve})
 }
 
 // askOwnerApproval asks the owner to approve a call of toolName with args,

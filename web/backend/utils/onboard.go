@@ -21,7 +21,6 @@ func EnsureOnboarded(configPath string) error {
 
 	cmd := execCommand(FindKernelBinary(), "onboard")
 	cmd.Env = append(os.Environ(), config.EnvConfig+"="+configPath)
-	cmd.Stdin = strings.NewReader("n\n")
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {

@@ -52,6 +52,6 @@ type ChannelManager interface {
 	// given channel/chat. Call this when a turn ends without a final response
 	// (e.g., ResponseHandled tools) to avoid orphaned animation goroutines.
 	// outboundCtx carries topic/thread info needed for channels that use
-	// scoped tracker keys (e.g., Telegram forum topics); may be nil.
+	// scoped tracker keys (e.g., Slack threads); may be nil.
 	DismissToolFeedback(ctx context.Context, channel, chatID string, outboundCtx *bus.InboundContext)
 }

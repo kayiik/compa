@@ -17,13 +17,17 @@ const cliChannel = "cli"
 
 // terminalChat runs the interactive chat's turns one at a time, in the order
 // they were typed. A turn can post a request in the chat -- the owner's
-// approval of a tool call -- and wait for the answer, so once one is posted the
-// chat keeps reading lines until its turns are done: an /approve or /deny goes
-// to the agent at once, and any other line waits its turn.
+// approval of a tool call, or a question -- and wait for the answer, so once one
+// is posted the chat keeps reading lines until its turns are done: an /approve
+// or /deny, and while a question waits any line, goes to the agent at once, and
+// any other line waits its turn.
 type terminalChat struct {
 	process func(input string) (string, error)
 	out     io.Writer
 	turns   chan string
+	// questionWaiting reports whether a question waits in the terminal's
+	// chat: the next line answers it. nil when none can.
+	questionWaiting func() bool
 
 	mu sync.Mutex
 	// queued counts the turns submitted and not finished.
@@ -48,7 +52,7 @@ func newTerminalChat(process func(input string) (string, error), out io.Writer) 
 // handle runs input, returning once the next line can be read: when the turns
 // are done, or when one posted in the chat, such as an approval request.
 func (c *terminalChat) handle(input string) {
-	if isApprovalAnswer(input) {
+	if isApprovalAnswer(input) || (c.questionWaiting != nil && c.questionWaiting()) {
 		c.run(input)
 		return
 	}

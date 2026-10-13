@@ -20,6 +20,7 @@ compa [options] [config.json]
 |---|---|
 | `-port <port>` | Port to listen on (default 18800). |
 | `-host <host>` | Host to listen on; overrides `-public`. |
+| `-allowed-hosts <names>` | Names and addresses, separated by commas, the web UI also answers to, for this run. |
 | `-public` | Listen on all interfaces instead of localhost only. Read [LAN access](install.md#lan-access) first. |
 | `-no-browser` | Don't open the browser on startup. |
 | `-console` | Run in the terminal, without the tray icon. |
@@ -79,7 +80,8 @@ compa-kernel agent                    # chat interactively; type exit to quit
 
 To use a provider with an API key instead, run
 `compa-kernel auth login --provider openai` (or `anthropic`) and paste the key
-when asked; other providers are connected on the Models page.
+when asked; other providers are connected on the Models page or with
+`compa-kernel model add` and `model sync`.
 
 ### agent
 
@@ -96,6 +98,10 @@ Interactive `compa-kernel agent` asks you for [approvals](use.md#approvals) in
 the terminal; its calls have the origin `cli`. With `-m` the terminal can't
 ask, so a call the policy asks about is refused unless an approver hook
 decides it.
+
+The agent's [questions](use.md#questions) show in the terminal too, as a
+numbered list; the next line you type answers, or `/cancel`. With `-m` there
+is nobody to ask, and the agent is told so.
 
 With `--events`, stdout is one JSON object per line, as the turn goes on: the
 answer being written as `{"type":"delta","text":"…"}` (`segment` starts a new
@@ -127,6 +133,18 @@ isolation, by default `compa-compita:local`. See [Compitas](compitas.md#computes
 | `model auto-free` | Discover and configure working zero-key free model providers. |
 | `model ping [instance-id]` | Probe reachability and latency of provider instances. |
 | `model roster` | List all curated providers supported by Compa. |
+| `model instances` | List the provider instances. |
+| `model add <instance-id>` | Add a provider instance: `--kind` (default the id), `--adapter`, `--protocol`, `--endpoint` (default the curated provider's), `--header name=value` and `--setting name=value` (repeatable; a value that parses as JSON is JSON), `--disabled`, `--api-key-stdin`. |
+| `model update <instance-id>` | Change a provider instance; only the flags given change. The flags of `add`, `--disabled=false` to enable, and `--clear-api-key`, `--clear-headers`, `--clear-settings`. `--header` and `--setting` add to the existing ones. A new connection drops the catalog: sync again. |
+| `model remove <instance-id>` | Remove a provider instance, its catalog and its stored key. Refused while a model route names it. |
+| `model sync <instance-id>` | Fetch the instance's models and save them as its catalog; models it no longer lists leave the shortlist, the routes and the selections. |
+| `model catalogs` | List the saved catalogs. |
+| `model models [--all] [--instance <id>]` | List the models on the chat shortlist; `--all` every model of the enabled instances. |
+
+The API key is only ever read from stdin (`--api-key-stdin`), hidden on a
+terminal, never taken as an argument. After `add`, `update`, `remove` and
+`sync` the running gateway is asked to reload its config; when none answers,
+the change applies when it starts.
 
 ### auth
 
@@ -144,11 +162,12 @@ choose **Settings** → **Linked devices** → **Link a device** and scan it wit
 ### JSON output
 
 For a program that runs `compa-kernel`, `--json` makes `model` (showing,
-setting or clearing the default model), `model auto-free`, `model ping`,
-`model roster`, `auth login`, `auth logout` and `auth status` print one JSON
+setting or clearing the default model), every `model` subcommand,
+`auth login`, `auth logout` and `auth status` print one JSON
 document on stdout instead of text. Prompts, progress and logs go to stderr.
 A command that fails prints `{"error": "..."}` on stdout and exits with
-status 1.
+status 1; `model remove` and `model update --disabled` blocked by model routes
+add `routes`, their names. Lists are `[]`, never `null`.
 
 The fields are those of the launcher's API, where it has the same data:
 
@@ -159,6 +178,12 @@ The fields are those of the launcher's API, where it has the same data:
 | `model auto-free` | The answer of `POST /api/provider-instances/auto-connect-free`: `ok`, `total`, `catalog_discovered`, `verified`, `instances`, `default_model`, and `outcomes`, each provider's `status`, `models`, `probe_model`, `latency_ms`, `error_class` and `error`. `ok` false is not a failure. |
 | `model ping [instance-id]` | `results`, one `POST /api/provider-instances/{id}/ping` answer per instance (`ok`, `instance_id`, `latency_ms`, `model_count`, `status`, `error`), and `total`. |
 | `model roster` | `providers` and `total`, as `GET /api/provider-roster`. |
+| `model instances` | `instances` and `total`. Each instance: `id`, `display_name`, `provider_kind`, `adapter`, `protocol`, `endpoint`, `state` (`enabled` or `disabled`), `credential_configured`, `header_names`, `setting_names` and `runtime` (when set; a proxy password shows as `****`). Header values, settings values and keys are never printed. |
+| `model add`, `model update` | `status` (`ok`), `instance` (as in `model instances`) and `reloaded`, whether the running gateway reloaded the config. |
+| `model remove` | `status` (`ok`), `instance_id` and `reloaded`. |
+| `model sync` | The answer of `POST /api/provider-instances/{id}/catalog/sync`: `instance_id`, `models` (each `id`, `owned_by`, `display_name`, `surfaces`, `input_modalities`, `audio_input`) and `total`; and `reloaded`. |
+| `model catalogs` | `catalogs` and `total`, as `GET /api/provider-instances/catalogs`: each `instance_id`, `provider_kind`, `models` and `fetched_at`. |
+| `model models` | `targets` and `total`, as `GET /api/provider-targets[?all=true]`: each `target`, `instance_id`, `model_id`, `label`, `instance_label`, `provider_kind`, `owned_by`, `display_name`, `surfaces` and `fetched_at`. |
 | `auth login` | `status` (`ok`), `provider`, `instance_id`, `model_count` and `default_model`. The key is read from stdin when it isn't a terminal. |
 | `auth logout` | `status` (`ok`) and `providers`, the providers logged out of. |
 | `auth status` | `providers`, each stored credential's `provider`, `auth_method`, `status` (`active`, `expired` or `needs_refresh`), `account_id` and `expires_at`, and `total`. Tokens are never printed. |
@@ -166,6 +191,8 @@ The fields are those of the launcher's API, where it has the same data:
 ```sh
 echo "$OPENAI_API_KEY" | compa-kernel auth login --provider openai --json
 compa-kernel model openai/gpt-5.4 --json
+echo "$KEY" | compa-kernel model add work --kind openai --api-key-stdin --json
+compa-kernel model sync work --json
 ```
 
 ### gateway
@@ -257,6 +284,8 @@ keeps its task and pattern records for 30 days.
 | `COMPA_HOME` | Folder for settings and data instead of `~/.compa`. |
 | `COMPA_CONFIG` | Config file to use instead of `config.json` in that folder. |
 | `COMPA_LAUNCHER_HOST` | Address the web UI listens on, as `-host` sets it; `-host` wins when you give both. It overrides `-public` and **Enable LAN Access**, so an address other than localhost opens the web UI to the network; read [LAN access](install.md#lan-access) first. |
+| `COMPA_DASHBOARD_PASSWORD_FILE` | File holding the first dashboard password, such as a Docker or Kubernetes secret. `compa` uses it only while no password is set, and refuses to start if the file can't be read or the password is too short. |
+| `COMPA_ALLOWED_HOSTS` | Names and addresses, separated by commas, the web UI answers to besides the saved **Allowed Hosts**, for as long as `compa` runs; `-allowed-hosts` adds more. |
 | `COMPA_BINARY` | The `compa-kernel` that `compa` runs, instead of the one beside it. |
 | `COMPA_GATEWAY_HOST`, `COMPA_GATEWAY_PORT` | Address and port of the gateway, instead of `gateway.host` and `gateway.port`. |
 | `COMPA_LOG_LEVEL` | Log level, instead of `gateway.log_level`: `debug`, `info`, `warn` (the default), `error` or `fatal`. |

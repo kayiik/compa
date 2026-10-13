@@ -340,11 +340,11 @@ else
 endif
 	@echo "Clean complete"
 
-## vet: Run go vet, as CI does
+## vet: Run go vet
 vet:
 	@$(WEB_GO) vet $(GO_BUILD_FLAGS) ./...
 
-## test: Run the Go tests one package at a time, as CI does, and the web UI tests
+## test: Run the Go tests one package at a time, and the web UI tests
 test:
 	@$(WEB_GO) test $(GO_BUILD_FLAGS) -p 1 ./...
 	@cd web/frontend && pnpm test

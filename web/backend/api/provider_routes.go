@@ -11,34 +11,9 @@ import (
 	"github.com/kayiik/compa/pkg/modelservice"
 )
 
-type providerInstanceCatalogResponse struct {
-	InstanceID   string         `json:"instance_id"`
-	ProviderKind string         `json:"provider_kind"`
-	Models       []CatalogModel `json:"models"`
-	FetchedAt    string         `json:"fetched_at"`
-}
+type providerInstanceCatalogResponse = modelservice.InstanceCatalog
 
-type providerTargetResponse struct {
-	Target     string `json:"target"`
-	InstanceID string `json:"instance_id"`
-	ModelID    string `json:"model_id"`
-	// Label is the name to show for the model: its catalog display name,
-	// else its id.
-	Label string `json:"label"`
-	// InstanceLabel is the name to show for the target's instance (see
-	// providerInstanceDisplayName).
-	InstanceLabel string `json:"instance_label"`
-	ProviderKind  string `json:"provider_kind"`
-	OwnedBy       string `json:"owned_by,omitempty"`
-	DisplayName   string `json:"display_name,omitempty"`
-	// Surfaces are the llmgw-core surfaces the catalog reports the model
-	// serves, such as audio_transcriptions and audio_speech.
-	Surfaces  []string `json:"surfaces,omitempty"`
-	FetchedAt string   `json:"fetched_at"`
-	// audioInput reports that the catalog declares the model takes audio
-	// (see CatalogModel.AudioInput).
-	audioInput bool
-}
+type providerTargetResponse = modelservice.ProviderTarget
 
 func (h *Handler) registerProviderRouteRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/model-routes", h.handleListProviderRoutes)
@@ -75,25 +50,8 @@ func (h *Handler) handleListProviderTargets(w http.ResponseWriter, r *http.Reque
 		writeJSON(w, http.StatusOK, map[string]any{"targets": allTargets, "total": len(allTargets)})
 		return
 	}
-
-	if len(cfg.ActiveModels) > 0 {
-		activeSet := make(map[string]bool, len(cfg.ActiveModels))
-		for _, m := range cfg.ActiveModels {
-			activeSet[strings.TrimSpace(m)] = true
-		}
-		filtered := make([]providerTargetResponse, 0, len(cfg.ActiveModels))
-		for _, target := range allTargets {
-			// Chat offers only targets that serve chat: a speech-only model
-			// never reaches the Chat selector, even when shortlisted.
-			if activeSet[target.Target] && modelservice.ServesChat(target.Surfaces) {
-				filtered = append(filtered, target)
-			}
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"targets": filtered, "total": len(filtered)})
-		return
-	}
-
-	writeJSON(w, http.StatusOK, map[string]any{"targets": []providerTargetResponse{}, "total": 0})
+	filtered := modelservice.ChatShortlistTargets(cfg, allTargets)
+	writeJSON(w, http.StatusOK, map[string]any{"targets": filtered, "total": len(filtered)})
 }
 
 func (h *Handler) handleListActiveModels(w http.ResponseWriter, r *http.Request) {
@@ -297,58 +255,11 @@ func (h *Handler) loadProviderProjectionState() (*config.Config, *CatalogStore, 
 }
 
 func instanceCatalogResponses(cfg *config.Config, store *CatalogStore) []providerInstanceCatalogResponse {
-	instances := providerInstancesByID(cfg)
-	responses := make([]providerInstanceCatalogResponse, 0)
-	for key, entry := range store.Entries {
-		instance := instances[key]
-		if !modelservice.ValidInstanceCatalog(key, entry, instance) {
-			continue
-		}
-		models := append([]CatalogModel(nil), entry.Models...)
-		sort.Slice(models, func(i, j int) bool { return models[i].ID < models[j].ID })
-		responses = append(responses, providerInstanceCatalogResponse{
-			InstanceID:   instance.ID,
-			ProviderKind: instance.ProviderKind,
-			Models:       models,
-			FetchedAt:    entry.FetchedAt,
-		})
-	}
-	sort.Slice(responses, func(i, j int) bool { return responses[i].InstanceID < responses[j].InstanceID })
-	return responses
+	return modelservice.ListInstanceCatalogs(cfg, store)
 }
 
 func providerTargetResponses(cfg *config.Config, store *CatalogStore) []providerTargetResponse {
-	instances := providerInstancesByID(cfg)
-	targets := make([]providerTargetResponse, 0)
-	for key, entry := range store.Entries {
-		instance := instances[key]
-		if instance == nil || instance.State != config.ProviderInstanceStateEnabled || !modelservice.ValidInstanceCatalog(key, entry, instance) {
-			continue
-		}
-		instanceLabel := providerInstanceDisplayName(instance)
-		for _, model := range entry.Models {
-			modelID := strings.TrimSpace(model.ID)
-			if modelID == "" {
-				continue
-			}
-			raw := instance.ID + "/" + modelID
-			if _, err := config.ParseExactModelTarget(raw); err != nil {
-				continue
-			}
-			label := strings.TrimSpace(model.DisplayName)
-			if label == "" {
-				label = modelID
-			}
-			targets = append(targets, providerTargetResponse{
-				Target: raw, InstanceID: instance.ID, ModelID: modelID,
-				Label: label, InstanceLabel: instanceLabel,
-				ProviderKind: instance.ProviderKind, OwnedBy: model.OwnedBy, DisplayName: model.DisplayName,
-				Surfaces: model.Surfaces, FetchedAt: entry.FetchedAt, audioInput: model.AudioInput,
-			})
-		}
-	}
-	sort.Slice(targets, func(i, j int) bool { return targets[i].Target < targets[j].Target })
-	return targets
+	return modelservice.ListProviderTargets(cfg, store)
 }
 
 func providerInstancesByID(cfg *config.Config) map[string]*config.ProviderInstanceConfig {

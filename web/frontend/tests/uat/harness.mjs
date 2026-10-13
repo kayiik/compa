@@ -572,68 +572,77 @@ try {
 
   // The extension daemon, when a kit describes one: the stock binary, and
   // the kit's UAT entrypoint, which registers the same providers with
-  // egress rewritten to the fake upstream.
+  // egress rewritten to the fake upstream. A kit that doesn't build skips
+  // the extension journey; the core journey runs either way.
+  let extensionReady = false
+  let stockInfo
+  let uatInfo
   if (kit) {
-    const extensionRepo = kit.repo
-    const goOffline = { ...process.env, GOFLAGS: "", GOPROXY: "off" }
-    await run("go", ["build", "-o", stockDaemonPath, kit.command], {
-      cwd: extensionRepo,
-      env: { ...goOffline, GOWORK: "off" },
-    })
-    const daemonModule = path.join(runRoot, "extension-daemon-uat")
-    await fs.mkdir(daemonModule, { recursive: true })
-    const extensionMod = await fs.readFile(
-      path.join(extensionRepo, "go.mod"),
-      "utf8",
-    )
-    const extensionGoVersion = extensionMod.match(/^go\s+(\S+)/m)?.[1]
-    // The module requires what the daemon requires, so the daemon's go.sum
-    // verifies every dependency and nothing is fetched.
-    const requires = [
-      ...extensionMod.matchAll(/^\s*(?:require\s+)?(\S+)\s+(v\S+)\s*$/gm),
-    ]
-      .map((match) => `\t${match[1]} ${match[2]}`)
-      .join("\n")
-    await fs.writeFile(
-      path.join(daemonModule, "go.mod"),
-      `module compa.uat/extensiondaemon\n\ngo ${extensionGoVersion}\n\nrequire (\n\t${kit.module} v0.0.0\n${requires}\n)\n\nreplace ${kit.module} => ${JSON.stringify(extensionRepo)}\n`,
-    )
-    await fs.copyFile(
-      path.join(extensionRepo, "go.sum"),
-      path.join(daemonModule, "go.sum"),
-    )
-    await fs.copyFile(
-      path.join(kitDir, "main.go"),
-      path.join(daemonModule, "main.go"),
-    )
-    await run("go", ["build", "-mod=mod", "-o", daemonPath, "."], {
-      cwd: daemonModule,
-      env: { ...goOffline, GOWORK: "off" },
-    })
-
-    const daemonEnv = { ...process.env, ...egressBlocked }
-    const prefixes = kit.envPrefixes ?? []
-    for (const key of Object.keys(daemonEnv)) {
-      const readByDaemon = prefixes.some((prefix) => key.startsWith(prefix))
-      if (
-        (readByDaemon || /^(https?_proxy|no_proxy)$/.test(key)) &&
-        !(key in egressBlocked)
+    try {
+      const extensionRepo = kit.repo
+      const goOffline = { ...process.env, GOFLAGS: "", GOPROXY: "off" }
+      await run("go", ["build", "-o", stockDaemonPath, kit.command], {
+        cwd: extensionRepo,
+        env: { ...goOffline, GOWORK: "off" },
+      })
+      const daemonModule = path.join(runRoot, "extension-daemon-uat")
+      await fs.mkdir(daemonModule, { recursive: true })
+      const extensionMod = await fs.readFile(
+        path.join(extensionRepo, "go.mod"),
+        "utf8",
       )
-        delete daemonEnv[key]
-    }
-    stockDaemon = startDaemon(stockDaemonPath, stockDaemonPort, [], daemonEnv)
-    const stockInfo = await daemonInfo(`http://127.0.0.1:${stockDaemonPort}`)
-    await stopProcess(stockDaemon)
-    daemon = startDaemon(
-      daemonPath,
-      daemonPort,
-      ["-upstream", fakeURL],
-      daemonEnv,
-    )
-    const uatInfo = await daemonInfo(daemonURL)
-    if (providerShape(stockInfo) !== providerShape(uatInfo)) {
-      throw new Error(
-        `UAT daemon providers differ from the stock daemon:\n${providerShape(stockInfo)}\n${providerShape(uatInfo)}`,
+      const extensionGoVersion = extensionMod.match(/^go\s+(\S+)/m)?.[1]
+      // The module requires what the daemon requires, so the daemon's go.sum
+      // verifies every dependency and nothing is fetched.
+      const requires = [
+        ...extensionMod.matchAll(/^\s*(?:require\s+)?(\S+)\s+(v\S+)\s*$/gm),
+      ]
+        .map((match) => `\t${match[1]} ${match[2]}`)
+        .join("\n")
+      await fs.writeFile(
+        path.join(daemonModule, "go.mod"),
+        `module compa.uat/extensiondaemon\n\ngo ${extensionGoVersion}\n\nrequire (\n\t${kit.module} v0.0.0\n${requires}\n)\n\nreplace ${kit.module} => ${JSON.stringify(extensionRepo)}\n`,
+      )
+      await fs.copyFile(
+        path.join(extensionRepo, "go.sum"),
+        path.join(daemonModule, "go.sum"),
+      )
+      await fs.copyFile(
+        path.join(kitDir, "main.go"),
+        path.join(daemonModule, "main.go"),
+      )
+      await run("go", ["build", "-mod=mod", "-o", daemonPath, "."], {
+        cwd: daemonModule,
+        env: { ...goOffline, GOWORK: "off" },
+      })
+
+      const daemonEnv = { ...process.env, ...egressBlocked }
+      const prefixes = kit.envPrefixes ?? []
+      for (const key of Object.keys(daemonEnv)) {
+        const readByDaemon = prefixes.some((prefix) => key.startsWith(prefix))
+        if (
+          (readByDaemon || /^(https?_proxy|no_proxy)$/.test(key)) &&
+          !(key in egressBlocked)
+        )
+          delete daemonEnv[key]
+      }
+      stockDaemon = startDaemon(stockDaemonPath, stockDaemonPort, [], daemonEnv)
+      stockInfo = await daemonInfo(`http://127.0.0.1:${stockDaemonPort}`)
+      await stopProcess(stockDaemon)
+      daemon = startDaemon(
+        daemonPath,
+        daemonPort,
+        ["-upstream", fakeURL],
+        daemonEnv,
+      )
+      uatInfo = await daemonInfo(daemonURL)
+      extensionReady = true
+    } catch (error) {
+      await stopProcess(daemon)
+      await stopProcess(stockDaemon)
+      daemon = stockDaemon = undefined
+      console.warn(
+        `The extension kit at ${kitDir} did not start, so the extension daemon journey is skipped:\n${error}`,
       )
     }
   } else {
@@ -641,20 +650,39 @@ try {
       `No extension kit at ${kitDir}: the extension daemon journey is skipped.`,
     )
   }
+  // A kit that builds and starts but registers other providers than the
+  // stock daemon is a regression, not a reason to skip.
+  if (extensionReady && providerShape(stockInfo) !== providerShape(uatInfo)) {
+    throw new Error(
+      `UAT daemon providers differ from the stock daemon:\n${providerShape(stockInfo)}\n${providerShape(uatInfo)}`,
+    )
+  }
 
-  const env = {
-    ...process.env,
+  // Compa gets only the settings this run gives it: a COMPA_* variable from
+  // the shell, such as COMPA_GATEWAY_PORT, would change what is tested. The
+  // first dashboard password comes from a file, as an unattended install's
+  // does, so no setup link is needed.
+  const passwordFile = path.join(runRoot, "dashboard-password")
+  await fs.writeFile(passwordFile, `${password}\n`, { mode: 0o600 })
+  // Nor do provider keys or tokens from the shell: no real provider is used.
+  const env = Object.fromEntries(
+    Object.entries(process.env).filter(
+      ([key]) => !key.startsWith("COMPA_") && !/_(API_KEY|TOKEN)$/.test(key),
+    ),
+  )
+  Object.assign(env, {
     COMPA_HOME: home,
     COMPA_CONFIG: configPath,
     COMPA_BINARY: kernelPath,
     COMPA_GATEWAY_HOST: "127.0.0.1",
+    COMPA_DASHBOARD_PASSWORD_FILE: passwordFile,
     COMPA_UAT_BASE_URL: baseURL,
     COMPA_UAT_FAKE_URL: fakeURL,
     COMPA_UAT_PASSWORD: password,
     COMPA_UAT_WORKSPACE: workspace,
     COMPA_UAT_AUDIO_FILE: fakeAudioPath,
-  }
-  if (kit) {
+  })
+  if (extensionReady) {
     Object.assign(env, {
       COMPA_UAT_EXTENSION_URL: daemonURL,
       COMPA_UAT_EXTENSION_SECRET: daemonSecret,
@@ -669,8 +697,6 @@ try {
     delete env.COMPA_UAT_EXTENSION_SECRET
     delete env.COMPA_UAT_EXTENSION_UPSTREAM
   }
-  for (const key of ["OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GEMINI_API_KEY"])
-    delete env[key]
 
   launcher = spawn(
     launcherPath,
@@ -723,13 +749,16 @@ try {
   await stopProcess(stockDaemon)
   await new Promise((resolve) => fakeServer.close(resolve))
   if (!failed || process.env.COMPA_UAT_KEEP !== "1") {
+    // Windows keeps a killed program's files locked for a moment; a folder
+    // left in the temporary folder must not fail a run that passed.
     for (let attempt = 0; attempt < 10; attempt += 1) {
       try {
         await fs.rm(runRoot, { recursive: true, force: true })
         break
       } catch (error) {
-        if (attempt === 9) throw error
-        await new Promise((resolve) => setTimeout(resolve, 250))
+        if (attempt === 9)
+          console.warn(`Could not remove ${runRoot}: ${error.message}`)
+        else await new Promise((resolve) => setTimeout(resolve, 250))
       }
     }
   } else {

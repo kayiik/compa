@@ -445,6 +445,7 @@ func main() {
 	lang := flag.String("lang", "", "Language of the tray menu: en (English) or zh (Chinese). Default: from LANG, else English")
 	console := flag.Bool("console", false, "Console mode, no GUI")
 	setPassword := flag.String("password", "", "Set dashboard password (min 8 characters) and exit; - reads it from standard input")
+	extraHosts := flag.String("allowed-hosts", "", "Comma-separated names the dashboard also answers to, for this run (and "+envAllowedHosts+")")
 
 	var debug bool
 	flag.BoolVar(&debug, "d", false, "Enable debug logging")
@@ -646,6 +647,12 @@ func main() {
 		)
 	}
 
+	if set, err := initialPasswordFromFile(context.Background(), passwordStore, os.Getenv(envDashboardPasswordFile)); err != nil {
+		logger.Fatalf("Could not set the first dashboard password: %v", err)
+	} else if set {
+		logger.InfoC("web", "Set the first dashboard password from "+envDashboardPasswordFile)
+	}
+
 	needsInitialSetup := false
 	if passwordStore != nil {
 		initialized, initErr := passwordStore.IsInitialized(context.Background())
@@ -739,7 +746,7 @@ func main() {
 		TrustedProxyCIDRs:    launcherCfg.TrustedProxyCIDRs,
 	}, middleware.HostAllowlist(middleware.HostAllowlistConfig{
 		ListenHosts:  []string{hostInput},
-		AllowedHosts: launcherCfg.AllowedHosts,
+		AllowedHosts: allowedHosts(launcherCfg.AllowedHosts, *extraHosts, os.Getenv(envAllowedHosts)),
 	}, middleware.SameOriginGuard(
 		middleware.APIBodyLimit(middleware.DefaultAPIBodyLimit, launcherUploadBodyLimits,
 			middleware.JSONContentType(dashAuth),

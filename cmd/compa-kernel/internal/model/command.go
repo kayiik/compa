@@ -72,6 +72,13 @@ Examples:
 	cmd.AddCommand(newAutoFreeCommand())
 	cmd.AddCommand(newPingCommand())
 	cmd.AddCommand(newRosterCommand())
+	cmd.AddCommand(newInstancesCommand())
+	cmd.AddCommand(newAddCommand())
+	cmd.AddCommand(newUpdateCommand())
+	cmd.AddCommand(newRemoveCommand())
+	cmd.AddCommand(newCatalogsCommand())
+	cmd.AddCommand(newModelsCommand())
+	cmd.AddCommand(newSyncCommand())
 
 	return cmd
 }

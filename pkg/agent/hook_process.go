@@ -39,6 +39,8 @@ type ProcessHookOptions struct {
 	InterceptLLM  bool
 	InterceptTool bool
 	ApproveTool   bool
+	// AnswerQuestion: intercept "answer_question".
+	AnswerQuestion bool
 }
 
 type ProcessHook struct {
@@ -297,6 +299,25 @@ func (ph *ProcessHook) ApproveTool(ctx context.Context, req *ToolApprovalRequest
 	return resp, nil
 }
 
+// AnswerQuestion asks the hook about the agent's questions to the owner:
+// hook.answer_question, answered with a QuestionDecision.
+func (ph *ProcessHook) AnswerQuestion(ctx context.Context, req *QuestionRequest) (QuestionDecision, error) {
+	if ph == nil || !ph.opts.AnswerQuestion {
+		return QuestionDecision{}, fmt.Errorf("process hook does not answer questions")
+	}
+	var resp QuestionDecision
+	if err := ph.call(ctx, "hook.answer_question", req, &resp); err != nil {
+		return QuestionDecision{}, err
+	}
+	return resp, nil
+}
+
+// answersQuestions reports whether the hook answers questions: intercept
+// "answer_question".
+func (ph *ProcessHook) answersQuestions() bool {
+	return ph != nil && ph.opts.AnswerQuestion
+}
+
 // approvesTools reports whether the hook is an approver: intercept
 // "approve_tool".
 func (ph *ProcessHook) approvesTools() bool {
@@ -316,6 +337,9 @@ func (ph *ProcessHook) hello(ctx context.Context) error {
 	}
 	if ph.opts.ApproveTool {
 		modes = append(modes, "approve")
+	}
+	if ph.opts.AnswerQuestion {
+		modes = append(modes, "question")
 	}
 
 	var result map[string]any
@@ -687,6 +711,14 @@ func (h *supervisedProcessHook) ApproveTool(ctx context.Context, req *ToolApprov
 
 func (h *supervisedProcessHook) approvesTools() bool {
 	return h.opts.ApproveTool
+}
+
+func (h *supervisedProcessHook) AnswerQuestion(ctx context.Context, req *QuestionRequest) (QuestionDecision, error) {
+	return h.hook().AnswerQuestion(ctx, req)
+}
+
+func (h *supervisedProcessHook) answersQuestions() bool {
+	return h.opts.AnswerQuestion
 }
 
 // exitError returns how the hook's process ended, once it has.

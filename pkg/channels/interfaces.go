@@ -53,7 +53,7 @@ type PlaceholderCapable interface {
 
 // StreamingCapable — channels that can show partial LLM output in real-time.
 // The channel SHOULD gracefully degrade if the platform rejects streaming
-// (e.g. Telegram bot without forum mode). In that case, Update becomes a no-op
+// (e.g. a bot lacking edit permission). In that case, Update becomes a no-op
 // and Finalize still delivers the final message.
 type StreamingCapable interface {
 	BeginStream(ctx context.Context, chatID string) (Streamer, error)
@@ -80,3 +80,22 @@ type TurnObserver interface {
 	TurnStarted(ctx context.Context, chatID string, turn bus.TurnNotice) error
 	TurnEnded(ctx context.Context, chatID string, turn bus.TurnNotice) error
 }
+
+// QuestionPresenter is implemented by channels that show the agent's
+// questions with their choices and send the owner's answers back, such as the
+// web chat. Other channels get the questions as a numbered text message.
+type QuestionPresenter interface {
+	// ShowQuestion shows prompt in chatID, and keeps showing it to clients
+	// that join the chat, until QuestionResolved. respond delivers an answer
+	// or a cancel; only the owner's may be delivered.
+	ShowQuestion(ctx context.Context, chatID string, prompt bus.QuestionPrompt, respond QuestionResponder) error
+	// QuestionResolved tells the chat that the prompt id no longer waits,
+	// with a bus.Question* outcome.
+	QuestionResolved(ctx context.Context, chatID, id, outcome string)
+}
+
+// QuestionResponder delivers the owner's answers to a question prompt, one
+// per question in order, or cancels it when cancel is set. It returns an
+// error, fit to show the owner, when the prompt no longer waits or the
+// answers don't fit its questions.
+type QuestionResponder func(answers []bus.QuestionAnswer, cancel bool) error

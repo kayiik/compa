@@ -6,8 +6,15 @@ import {
 } from "@/features/chat/assistant-message-state"
 import {
   type ChatAttachment,
+  type ChatQuestionItem,
+  type ChatQuestionOption,
   type ContextUsage,
+  type PendingQuestion,
+  findQuestionByRequest,
+  patchQuestion,
+  removeQuestion,
   updateChatStore,
+  upsertQuestion,
 } from "@/store/chat"
 
 export interface WebChatMessage {
@@ -105,6 +112,46 @@ function parseModelName(payload: Record<string, unknown>): string | undefined {
 function parseString(payload: Record<string, unknown>, key: string) {
   const value = payload[key]
   return typeof value === "string" && value.trim() ? value.trim() : undefined
+}
+
+export function parseQuestionCreate(
+  payload: Record<string, unknown>,
+): PendingQuestion | undefined {
+  const questionId = parseString(payload, "question_id")
+  if (!questionId || !Array.isArray(payload.questions)) return undefined
+  const questions: ChatQuestionItem[] = []
+  for (const raw of payload.questions) {
+    if (!raw || typeof raw !== "object") continue
+    const item = raw as Record<string, unknown>
+    const options: ChatQuestionOption[] = []
+    if (Array.isArray(item.options)) {
+      for (const rawOption of item.options) {
+        if (!rawOption || typeof rawOption !== "object") continue
+        const option = rawOption as Record<string, unknown>
+        const label = parseString(option, "label")
+        if (!label) continue
+        options.push({
+          label,
+          description:
+            typeof option.description === "string" ? option.description : "",
+          ...(option.recommended === true ? { recommended: true } : {}),
+        })
+      }
+    }
+    questions.push({
+      header: typeof item.header === "string" ? item.header : "",
+      question: typeof item.question === "string" ? item.question : "",
+      options,
+      ...(item.multiple === true ? { multiple: true } : {}),
+    })
+  }
+  if (questions.length === 0) return undefined
+  const expiresAt = Number(payload.expires_at)
+  return {
+    questionId,
+    expiresAt: Number.isFinite(expiresAt) ? expiresAt : 0,
+    questions,
+  }
 }
 
 export function handleWebChatMessage(
@@ -262,11 +309,39 @@ export function handleWebChatMessage(
       updateChatStore({ isTyping: false, isTurnActive: false })
       break
 
+    case "question.create": {
+      const question = parseQuestionCreate(payload)
+      if (question) upsertQuestion(expectedSessionId, question)
+      break
+    }
+
+    case "question.resolved": {
+      const questionId = parseString(payload, "question_id")
+      if (questionId) removeQuestion(expectedSessionId, questionId)
+      break
+    }
+
     case "error": {
       const requestId =
         typeof payload.request_id === "string" ? payload.request_id : ""
       const errorMessage =
         typeof payload.message === "string" ? payload.message : ""
+
+      // A refused answer or cancel shows on its card; the turn still waits.
+      const asked = requestId ? findQuestionByRequest(requestId) : undefined
+      if (asked) {
+        // Already answered, cancelled or expired: the card is stale.
+        if (payload.code === "question_not_waiting") {
+          removeQuestion(asked.sessionId, asked.question.questionId)
+          break
+        }
+        patchQuestion(asked.sessionId, asked.question.questionId, {
+          error:
+            errorMessage ||
+            (typeof payload.code === "string" ? payload.code : "error"),
+        })
+        break
+      }
 
       console.error("Web chat error:", payload)
       if (errorMessage) {
