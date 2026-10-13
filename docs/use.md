@@ -162,7 +162,8 @@ chat message; the agent is told to shorten them otherwise. You can always
 answer in your own words instead, or cancel. The turn waits for your answer,
 up to 30 minutes; the agent is told if you cancelled or didn't answer. It is
 told to look things up before asking and to offer only real answers: an option
-such as "Cancel", "Other" or "Provide the ID" is refused.
+such as "Cancel", "Other" or "Provide the ID" is refused, since cancelling
+and answering in your own words are built in.
 
 The questions go where an approval would: the chat of your message, or for a
 scheduled job the chat you last wrote to Compa from (with none, the agent is

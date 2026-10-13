@@ -235,14 +235,24 @@ func requiredText(obj map[string]any, key, where string, maxRunes int) (string, 
 	return s, nil
 }
 
-// placeholderOptionWords are labels that stand for no answer: the person can
-// always cancel or type their own, so an option for either is noise.
-var placeholderOptionWords = map[string]bool{
-	"cancel": true, "other": true, "none": true, "skip": true, "other (specify)": true,
-	"something else": true, "type my own": true, "custom": true, "abort": true,
+// placeholderOptions are labels that stand for no answer: cancelling and
+// typing an answer are built in, so an option for either is noise. Only
+// these exact phrases are refused; "None" or "Skip" can be real answers.
+var placeholderOptions = map[string]bool{
+	"cancel": true, "other": true, "other (specify)": true, "other (please specify)": true,
+	"something else": true, "type my own": true, "type my own answer": true, "type your own": true,
 }
 
 func placeholderOption(label string) bool {
-	l := strings.ToLower(strings.TrimRight(strings.TrimSpace(label), ".!…"))
-	return placeholderOptionWords[l] || strings.HasPrefix(l, "provide ") || strings.HasPrefix(l, "enter ")
+	l := strings.ToLower(strings.TrimRight(strings.TrimSpace(label), ".!:…"))
+	if placeholderOptions[l] {
+		return true
+	}
+	// A step, not an answer: "Provide the table ID", "Enter your row id".
+	for _, prefix := range []string{"provide the ", "provide your ", "enter the ", "enter your "} {
+		if strings.HasPrefix(l, prefix) {
+			return true
+		}
+	}
+	return false
 }

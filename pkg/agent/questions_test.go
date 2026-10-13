@@ -745,7 +745,7 @@ func TestQuestionWaitsInItsThread(t *testing.T) {
 // Options that stand for no answer are refused, with a reason the model can
 // act on: cancelling and typing an answer are built in.
 func TestAskUserRefusesPlaceholderOptions(t *testing.T) {
-	for _, label := range []string{"Cancel", "other", "None.", "Provide Table ID", "Enter the row id"} {
+	for _, label := range []string{"Cancel", "other", "Other:", "Provide the table ID", "Enter the row id"} {
 		_, err := parseAskUserQuestions(map[string]any{"questions": []any{map[string]any{
 			"header": "Table", "question": "Which table?",
 			"options": []any{
@@ -762,6 +762,9 @@ func TestAskUserRefusesPlaceholderOptions(t *testing.T) {
 		"options": []any{
 			map[string]any{"label": "Next Friday", "description": "x"},
 			map[string]any{"label": "Other teams first", "description": "x"},
+			map[string]any{"label": "None", "description": "x"},
+			map[string]any{"label": "Enter maintenance mode", "description": "x"},
+			map[string]any{"label": "Cancel subscription", "description": "x"},
 		},
 	}}}); err != nil {
 		t.Fatalf("real options refused: %v", err)

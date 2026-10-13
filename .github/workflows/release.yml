@@ -67,37 +67,35 @@ jobs:
             echo "run the release on main, not $GITHUB_REF" >&2
             exit 1
           }
-          if true; then
-            releases=$(gh api --paginate --slurp "repos/$GH_REPO/releases?per_page=100")
-            matches=$(printf '%s' "$releases" | jq --arg tag "$REQUESTED_TAG" '[.[][] | select(.tag_name == $tag)]')
-            published=$(printf '%s' "$matches" | jq '[.[] | select(.draft == false)] | length')
-            drafts=$(printf '%s' "$matches" | jq '[.[] | select(.draft == true)] | length')
-            test "$published" -eq 0 || {
-              echo "$REQUESTED_TAG is already published; published releases are immutable" >&2
+          releases=$(gh api --paginate --slurp "repos/$GH_REPO/releases?per_page=100")
+          matches=$(printf '%s' "$releases" | jq --arg tag "$REQUESTED_TAG" '[.[][] | select(.tag_name == $tag)]')
+          published=$(printf '%s' "$matches" | jq '[.[] | select(.draft == false)] | length')
+          drafts=$(printf '%s' "$matches" | jq '[.[] | select(.draft == true)] | length')
+          test "$published" -eq 0 || {
+            echo "$REQUESTED_TAG is already published; published releases are immutable" >&2
+            exit 1
+          }
+          test "$drafts" -le 1 || {
+            echo "more than one draft release exists for $REQUESTED_TAG; refusing to guess which to resume" >&2
+            exit 1
+          }
+          main=$(git rev-parse --verify refs/remotes/origin/main)
+          if [ "$drafts" -eq 1 ]; then
+            # Resuming a staged draft: its commit only has to still be on main.
+            git merge-base --is-ancestor "$GITHUB_SHA" "$main" || {
+              echo "the draft release's commit is no longer on main" >&2
               exit 1
             }
-            test "$drafts" -le 1 || {
-              echo "more than one draft release exists for $REQUESTED_TAG; refusing to guess which to resume" >&2
+          else
+            test "$main" = "$GITHUB_SHA" || {
+              echo "$REQUESTED_TAG points at $GITHUB_SHA, but main is at $main; tag the current head of main" >&2
               exit 1
             }
-            main=$(git rev-parse --verify refs/remotes/origin/main)
-            if [ "$drafts" -eq 1 ]; then
-              # Resuming a staged draft: its commit only has to still be on main.
-              git merge-base --is-ancestor "$GITHUB_SHA" "$main" || {
-                echo "the draft release's commit is no longer on main" >&2
-                exit 1
-              }
-            else
-              test "$main" = "$GITHUB_SHA" || {
-                echo "$REQUESTED_TAG points at $GITHUB_SHA, but main is at $main; tag the current head of main" >&2
-                exit 1
-              }
-            fi
-            previous=$(git tag --list 'v*' | grep -E "$semver" | grep -vFx "$REQUESTED_TAG" | sort -V | tail -n 1 || true)
-            if [ -n "$previous" ] && [ "$(printf '%s\n%s\n' "$previous" "$REQUESTED_TAG" | sort -V | tail -n 1)" != "$REQUESTED_TAG" ]; then
-              echo "$REQUESTED_TAG must be newer than $previous" >&2
-              exit 1
-            fi
+          fi
+          previous=$(git tag --list 'v*' | grep -E "$semver" | grep -vFx "$REQUESTED_TAG" | sort -V | tail -n 1 || true)
+          if [ -n "$previous" ] && [ "$(printf '%s\n%s\n' "$previous" "$REQUESTED_TAG" | sort -V | tail -n 1)" != "$REQUESTED_TAG" ]; then
+            echo "$REQUESTED_TAG must be newer than $previous" >&2
+            exit 1
           fi
           {
             echo "tag=$REQUESTED_TAG"
@@ -501,9 +499,8 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           provenance: false
-          tags: |
-            ${{ env.IMAGE }}:${{ needs.validate.outputs.version }}
-            ${{ env.IMAGE }}:latest
+          # :latest moves only once the release is published (release-publish).
+          tags: ${{ env.IMAGE }}:${{ needs.validate.outputs.version }}
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.version=${{ needs.validate.outputs.version }}
@@ -525,6 +522,7 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: write
+      packages: write
     steps:
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
@@ -569,6 +567,21 @@ jobs:
           done
           echo "published $TAG, but releases/latest still points at '$latest'" >&2
           exit 1
+
+      # The image's :latest follows the published release, never a draft.
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Point the image's latest tag at this release
+        env:
+          IMAGE: ghcr.io/${{ github.repository }}
+          VERSION: ${{ needs.validate.outputs.version }}
+        run: docker buildx imagetools create -t "$IMAGE:latest" "$IMAGE:$VERSION"
 
   # The docs site, published with the release it describes.
   pages:

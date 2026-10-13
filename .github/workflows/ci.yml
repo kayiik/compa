@@ -1,7 +1,8 @@
 # Cheap checks on pushes to main and on pull requests: formatting, go.mod
-# tidiness and doc links. Nothing is built or tested here; the test suites
-# run locally before a release (CONTRIBUTING.md), and releases start by hand
-# (release.yml).
+# tidiness and doc links. Compa is public, so this is the check an outside
+# contributor's pull request gets, on free minutes. Nothing is built or
+# tested here: the test suites run locally before a release (CONTRIBUTING.md),
+# and releases start by hand (release.yml).
 name: ci
 
 on:
@@ -22,7 +23,7 @@ jobs:
   lint:
     name: gofmt / go.mod / doc links / frontend format
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -49,8 +50,23 @@ jobs:
         if: ${{ !cancelled() }}
         run: sh scripts/check-doc-links.sh
 
-      # Prettier alone, without installing the frontend's dependencies.
+      # Prettier with the frontend's own plugins, so their install, without
+      # build scripts; nothing is built or tested.
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+        if: ${{ !cancelled() }}
+        with:
+          package_json_file: web/frontend/package.json
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        if: ${{ !cancelled() }}
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: web/frontend/pnpm-lock.yaml
+
       - name: Frontend formatting
         if: ${{ !cancelled() }}
         working-directory: web/frontend
-        run: npx --yes "prettier@$(node -p "require('./package.json').devDependencies.prettier.replace(/^[^0-9]*/, '')")" --check .
+        run: |
+          pnpm install --frozen-lockfile --ignore-scripts
+          pnpm run format
