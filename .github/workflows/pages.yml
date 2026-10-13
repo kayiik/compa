@@ -1,12 +1,10 @@
-# Publish docs/ (the site at docs/index.html) to GitHub Pages.
+# Publish docs/ (the site at docs/index.html) to GitHub Pages. The release
+# runs it once it has published, so the site describes what users can
+# install; run it by hand only to fix the site of the current release.
 name: Deploy GitHub Pages
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'docs/**'
-      - '.github/workflows/pages.yml'
+  workflow_call: {}
   workflow_dispatch:
 
 permissions:

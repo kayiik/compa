@@ -7,7 +7,8 @@
 # build provenance, stages them on a draft release tagged at main's head,
 # checks the digest of every uploaded asset, pushes the container image
 # ghcr.io/kayiik/compa for linux/amd64 and linux/arm64, and publishes the
-# release. It runs no test suites: they pass locally before a release starts.
+# release, then the docs site. It runs no test suites: they pass locally
+# before a release starts.
 # Then:
 #
 #   irm https://github.com/kayiik/compa/releases/latest/download/install.ps1 | iex
@@ -568,3 +569,12 @@ jobs:
           done
           echo "published $TAG, but releases/latest still points at '$latest'" >&2
           exit 1
+
+  # The docs site, published with the release it describes.
+  pages:
+    needs: release-publish
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/pages.yml
