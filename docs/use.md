@@ -160,7 +160,9 @@ one to four questions, each with two to six options (one may be marked
 recommended), some letting you pick several. The questions have to fit in one
 chat message; the agent is told to shorten them otherwise. You can always
 answer in your own words instead, or cancel. The turn waits for your answer,
-up to 30 minutes; the agent is told if you cancelled or didn't answer.
+up to 30 minutes; the agent is told if you cancelled or didn't answer. It is
+told to look things up before asking and to offer only real answers: an option
+such as "Cancel", "Other" or "Provide the ID" is refused.
 
 The questions go where an approval would: the chat of your message, or for a
 scheduled job the chat you last wrote to Compa from (with none, the agent is

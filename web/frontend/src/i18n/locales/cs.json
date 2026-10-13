@@ -109,14 +109,14 @@
       "title_other": "{{count}} otázek pro vás",
       "title_few": "{{count}} otázky pro vás",
       "title_many": "{{count}} otázky pro vás",
-      "chooseOne": "Vyberte jednu možnost",
       "chooseMany": "Vyberte všechny vhodné",
       "recommended": "Doporučeno",
       "other": "Nebo napište vlastní odpověď",
-      "otherPlaceholder": "Vaše odpověď",
+      "otherPlaceholder": "Napište vlastní odpověď",
       "submit": "Odeslat",
       "cancel": "Zrušit",
-      "sendFailed": "Odeslání se nezdařilo. Zkontrolujte připojení a zkuste to znovu."
+      "sendFailed": "Odeslání se nezdařilo. Zkontrolujte připojení a zkuste to znovu.",
+      "next": "Další"
     },
     "thinking": {
       "step1": "Přemýšlím..."

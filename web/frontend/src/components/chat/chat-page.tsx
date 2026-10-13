@@ -861,7 +861,8 @@ export function ChatPage() {
             />
           ))}
 
-          {isTyping && <TypingIndicator />}
+          {/* While a question waits, the card is the status, not Thinking. */}
+          {isTyping && questions.length === 0 && <TypingIndicator />}
         </div>
       </div>
 

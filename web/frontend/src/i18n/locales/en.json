@@ -107,14 +107,14 @@
     "question": {
       "title_one": "{{count}} question for you",
       "title_other": "{{count}} questions for you",
-      "chooseOne": "Choose one",
       "chooseMany": "Choose any that apply",
       "recommended": "Recommended",
       "other": "Or type your own answer",
-      "otherPlaceholder": "Your answer",
+      "otherPlaceholder": "Type your own answer",
       "submit": "Submit",
       "cancel": "Cancel",
-      "sendFailed": "Couldn't send. Check the connection and try again."
+      "sendFailed": "Couldn't send. Check the connection and try again.",
+      "next": "Next"
     },
     "thinking": {
       "step1": "Thinking..."

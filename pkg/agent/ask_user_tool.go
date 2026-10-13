@@ -44,9 +44,11 @@ func (t *askUserTool) Name() string { return askUserToolName }
 
 func (t *askUserTool) Description() string {
 	return "Ask the person you work for one to four questions, each with two to six options, and wait " +
-		"for the answers. Use it when you need their decision or preference and can't reasonably assume it; " +
-		"don't use it for what you can find out yourself. They may choose options, answer in their own " +
-		"words, or cancel. Mark the option you suggest as recommended."
+		"for the answers. Use it when you need their decision or preference and can't reasonably assume it. " +
+		"Look things up with your other tools first: ask them to choose among the real items you found, " +
+		"never for ids, JSON or anything else you could find or work out. Each option is a real answer " +
+		"(\"Postgres\", \"Next Friday\"), never a step such as \"Provide the ID\". Cancelling and answering in " +
+		"their own words are built in: don't add options for them. Mark the option you suggest as recommended."
 }
 
 func (t *askUserTool) Parameters() map[string]any {
@@ -197,6 +199,9 @@ func parseAskUserQuestions(args map[string]any) ([]bus.Question, error) {
 			if opt.Recommended {
 				recommended++
 			}
+			if placeholderOption(opt.Label) {
+				return nil, fmt.Errorf("%s.label %q is not an answer: cancelling and answering in their own words are built in, so give only real choices", optWhere, opt.Label)
+			}
 			if _, dup := optionLabel(q, opt.Label); dup {
 				return nil, fmt.Errorf("%s.options has the label %q twice", where, opt.Label)
 			}
@@ -228,4 +233,16 @@ func requiredText(obj map[string]any, key, where string, maxRunes int) (string, 
 		return "", fmt.Errorf("%s.%s is too long (%d characters, at most %d)", where, key, n, maxRunes)
 	}
 	return s, nil
+}
+
+// placeholderOptionWords are labels that stand for no answer: the person can
+// always cancel or type their own, so an option for either is noise.
+var placeholderOptionWords = map[string]bool{
+	"cancel": true, "other": true, "none": true, "skip": true, "other (specify)": true,
+	"something else": true, "type my own": true, "custom": true, "abort": true,
+}
+
+func placeholderOption(label string) bool {
+	l := strings.ToLower(strings.TrimRight(strings.TrimSpace(label), ".!…"))
+	return placeholderOptionWords[l] || strings.HasPrefix(l, "provide ") || strings.HasPrefix(l, "enter ")
 }

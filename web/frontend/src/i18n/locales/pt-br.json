@@ -107,14 +107,14 @@
     "question": {
       "title_one": "{{count}} pergunta para você",
       "title_other": "{{count}} perguntas para você",
-      "chooseOne": "Escolha uma",
       "chooseMany": "Escolha todas que se aplicam",
       "recommended": "Recomendado",
       "other": "Ou digite sua própria resposta",
-      "otherPlaceholder": "Sua resposta",
+      "otherPlaceholder": "Digite sua própria resposta",
       "submit": "Enviar",
       "cancel": "Cancelar",
-      "sendFailed": "Não foi possível enviar. Verifique a conexão e tente de novo."
+      "sendFailed": "Não foi possível enviar. Verifique a conexão e tente de novo.",
+      "next": "Próxima"
     },
     "thinking": {
       "step1": "Pensando..."
